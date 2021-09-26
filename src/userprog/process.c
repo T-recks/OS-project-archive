@@ -1,6 +1,7 @@
 #include "userprog/process.h"
 #include <debug.h>
 #include <inttypes.h>
+#include <list.h>
 #include <round.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -279,6 +280,24 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
   if (t->pcb->pagedir == NULL)
     goto done;
   process_activate();
+
+  // initialize argv list
+  t->pcb->argv = (struct list*)malloc(sizeof(struct list));
+  list_init(t->pcb->argv);
+
+  // add each arg to the argv list & increment argc
+  char *token, *save_ptr;
+  int argc = 0;
+  for (token = strtok_r((char*)file_name, " ", &save_ptr); token != NULL;
+       token = strtok_r(NULL, " ", &save_ptr)) {
+    struct word* arg = (struct word*)malloc(sizeof(struct word));
+    arg->val = token;
+    arg->len = strlen(token);
+    list_push_back(t->pcb->argv, &arg->elem);
+    argc++;
+  }
+
+  // TODO: add args to stack
 
   /* Open executable file. */
   file = filesys_open(file_name);
