@@ -27,7 +27,16 @@ struct process {
   uint32_t* pagedir;          /* Page directory. */
   char process_name[16];      /* Name of the main thread */
   struct thread* main_thread; /* Pointer to main thread */
+  struct list* argv;
 };
+
+/*
+Structure the words extracted from the user command into a list. */
+typedef struct word {
+    char* val;
+    int len;
+    struct list_elem elem;
+} word_t;
 
 void userprog_init(void);
 
