@@ -366,11 +366,10 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
   if (!setup_stack(esp))
     goto done;
 
-  // TODO: add args to stack (go backwards)
+  //add args to stack (go backwards)
   struct list_elem* e;
-
   int* addresses[argc];
-  int i = argc-1;
+  int i = 0;
   int tot_len = 0;
   for (e = list_rbegin(t->pcb->argv); e != list_rend(t->pcb->argv); e = list_prev(e)) {
     struct word* arg = list_entry(e, struct word, elem);
@@ -380,15 +379,29 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
     memcpy(*esp, arg, arg->len);
     // save address
     addresses[i] = (int*) *esp;
+    i++;
     tot_len += arg->len;
   }
   int offset = (tot_len + 4 * (argc + 1) + 8) % 16;
   int padding = (16 - offset) % 16;
-  // TODO: add padding to stack
-  // TODO: push null sentinel to stack
-  // TODO: push each arg address
-  // TODO: push argv[0]?
-  // TODO: push argc
+  //add padding to stack
+  *esp = *esp - padding;
+  //push null sentinel to stack
+  *esp = *esp - 4;
+  void* sentinel = NULL;
+  memcpy(*esp, &sentinel, sizeof(void*));
+  //push each arg address
+  for (i = 0; i < argc; i++) {
+    *esp = *esp - 4;
+    memcpy(*esp, addresses[i], sizeof(void*));
+  }
+  //push argv
+  void* argv = *esp;
+  *esp = *esp - 4;
+  memcpy(*esp, argv, sizeof(void*));
+  //push argc
+  *esp = *esp - 4;
+  memcpy(*esp, &argc, sizeof(int));
   // TODO: push a return address
   /* Start address. */
   *eip = (void (*)(void))ehdr.e_entry;
