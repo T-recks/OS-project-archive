@@ -1,6 +1,7 @@
 #include "userprog/process.h"
 #include <debug.h>
 #include <inttypes.h>
+#include <list.h>
 #include <round.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -280,6 +281,22 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
     goto done;
   process_activate();
 
+  // initialize argv list
+  t->pcb->argv = (struct list*)malloc(sizeof(struct list));
+  list_init(t->pcb->argv);
+
+  // add each arg to the argv list & increment argc
+  char *token, *save_ptr;
+  int argc = 0;
+  for (token = strtok_r((char*)file_name, " ", &save_ptr); token != NULL;
+       token = strtok_r(NULL, " ", &save_ptr)) {
+    struct word* arg = (struct word*)malloc(sizeof(struct word));
+    arg->val = token;
+    arg->len = sizeof(char) * (strlen(token) + 1);
+    list_push_back(t->pcb->argv, &arg->elem);
+    argc++;
+  }
+
   /* Open executable file. */
   file = filesys_open(file_name);
   if (file == NULL) {
@@ -349,6 +366,30 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
   if (!setup_stack(esp))
     goto done;
 
+  // TODO: add args to stack (go backwards)
+  struct list_elem* e;
+
+  int* addresses[argc];
+  int i = argc-1;
+  int tot_len = 0;
+  for (e = list_rbegin(t->pcb->argv); e != list_rend(t->pcb->argv); e = list_prev(e)) {
+    struct word* arg = list_entry(e, struct word, elem);
+    // move stack pointer down
+    *esp = *esp - arg->len;
+    // copy arg to stack
+    memcpy(*esp, arg, arg->len);
+    // save address
+    addresses[i] = (int*) *esp;
+    tot_len += arg->len;
+  }
+  int offset = (tot_len + 4 * (argc + 1) + 8) % 16;
+  int padding = (16 - offset) % 16;
+  // TODO: add padding to stack
+  // TODO: push null sentinel to stack
+  // TODO: push each arg address
+  // TODO: push argv[0]?
+  // TODO: push argc
+  // TODO: push a return address
   /* Start address. */
   *eip = (void (*)(void))ehdr.e_entry;
 
