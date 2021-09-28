@@ -258,6 +258,8 @@ struct Elf32_Phdr {
 #define PF_W 2 /* Writable. */
 #define PF_R 4 /* Readable. */
 
+#define MAX_ARGS 25
+
 static bool setup_stack(void** esp);
 static bool validate_segment(const struct Elf32_Phdr*, struct file*);
 static bool load_segment(struct file* file, off_t ofs, uint8_t* upage, uint32_t read_bytes,
@@ -274,6 +276,7 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
   off_t file_ofs;
   bool success = false;
   int i;
+  void* addresses[MAX_ARGS];
 
   /* Allocate and activate page directory. */
   t->pcb->pagedir = pagedir_create();
@@ -290,6 +293,7 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
   int argc = 0;
   for (token = strtok_r((char*)file_name, " ", &save_ptr); token != NULL;
        token = strtok_r(NULL, " ", &save_ptr)) {
+    if (argc >= MAX_ARGS) { goto done; }
     struct word* arg = (struct word*)malloc(sizeof(struct word));
     arg->val = token;
     arg->len = sizeof(char) * (strlen(token) + 1);
@@ -368,8 +372,7 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
 
   //add args to stack (go backwards)
   struct list_elem* e;
-  int* addresses[argc];
-  int i = 0;
+  i = 0;
   int tot_len = 0;
   for (e = list_rbegin(t->pcb->argv); e != list_rend(t->pcb->argv); e = list_prev(e)) {
     struct word* arg = list_entry(e, struct word, elem);
@@ -382,7 +385,7 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
     i++;
     tot_len += arg->len;
   }
-  int offset = (tot_len + 4 * (argc + 1) + 8) % 16;
+  int offset = (tot_len + (sizeof(void*) * (argc + 1)) + (2 * sizeof(void*))) % 16;
   int padding = (16 - offset) % 16;
   //add padding to stack
   *esp = *esp - padding;
@@ -393,12 +396,12 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
   //push each arg address
   for (i = 0; i < argc; i++) {
     *esp = *esp - 4;
-    memcpy(*esp, addresses[i], sizeof(void*));
+    memcpy(*esp, addresses + i, sizeof(void*));
   }
   //push argv
   void* argv = *esp;
   *esp = *esp - 4;
-  memcpy(*esp, argv, sizeof(void*));
+  memcpy(*esp, &argv, sizeof(void*));
   //push argc
   *esp = *esp - 4;
   memcpy(*esp, &argc, sizeof(int));
