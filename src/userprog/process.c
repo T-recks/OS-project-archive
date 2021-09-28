@@ -291,10 +291,11 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
   // add each arg to the argv list & increment argc
   char *token, *save_ptr;
   int argc = 0;
+  struct word* arg;
   for (token = strtok_r((char*)file_name, " ", &save_ptr); token != NULL;
        token = strtok_r(NULL, " ", &save_ptr)) {
     if (argc >= MAX_ARGS) { goto done; }
-    struct word* arg = (struct word*)malloc(sizeof(struct word));
+    arg = (struct word*)malloc(sizeof(struct word));
     arg->val = token;
     arg->len = sizeof(char) * (strlen(token) + 1);
     list_push_back(t->pcb->argv, &arg->elem);
@@ -379,7 +380,7 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
     // move stack pointer down
     *esp = *esp - arg->len;
     // copy arg to stack
-    memcpy(*esp, arg, arg->len);
+    memcpy(*esp, arg->val, arg->len);
     // save address
     addresses[i] = (int*) *esp;
     i++;
