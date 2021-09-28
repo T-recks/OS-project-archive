@@ -388,8 +388,8 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
   *esp = *esp - padding;
   //push null sentinel to stack
   *esp = *esp - 4;
-  void* sentinel = NULL;
-  memcpy(*esp, &sentinel, sizeof(void*));
+  void* nullptr = NULL;
+  memcpy(*esp, &nullptr, sizeof(void*));
   //push each arg address
   for (i = 0; i < argc; i++) {
     *esp = *esp - 4;
@@ -402,7 +402,9 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
   //push argc
   *esp = *esp - 4;
   memcpy(*esp, &argc, sizeof(int));
-  // TODO: push a return address
+  //push a dummy (0) return address
+  *esp = *esp - 4;
+  memcpy(*esp, &nullptr, sizeof(void*));
   /* Start address. */
   *eip = (void (*)(void))ehdr.e_entry;
 
