@@ -299,6 +299,10 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
     arg->val = token;
     arg->len = sizeof(char) * (strlen(token) + 1);
     list_push_back(t->pcb->argv, &arg->elem);
+    if (argc == 0)
+    {
+      strlcpy(t->pcb->process_name, token, strlen(token)+1);
+    }
     argc++;
   }
 
