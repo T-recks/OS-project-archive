@@ -5,6 +5,7 @@
 #include "threads/thread.h"
 #include "userprog/process.h"
 #include "threads/vaddr.h"
+#include "userprog/pagedir.h"
 #include "devices/shutdown.h"
 
 static void syscall_handler(struct intr_frame*);
@@ -17,7 +18,7 @@ static int handle_practice(int val) {
   return val + 1;
 }
 
-static void handle_exit(int status) {
+void handle_exit(int status) {
   struct process *pcb = thread_current()->pcb;
   printf("%s: exit(%d)\n", pcb->process_name, status);
   lock_acquire(&pcb->ws->lock);
@@ -105,6 +106,7 @@ static int handle_write(uint32_t* args) {
  * */
 static void validate_args(struct intr_frame* f, uint32_t* args, int n) {
   // TODO: How to tell if the pointer is to a buffer
+  
   int i = 1;
   for (; i != n+1; i++) {
     if ((void*)args[i] == NULL && args[0] != SYS_EXIT) {
@@ -116,11 +118,15 @@ static void validate_args(struct intr_frame* f, uint32_t* args, int n) {
       // Null pointer
       break;
     }
-    // For checking if the pointer is to invalid memory, add 3 to the
+    // For checking if the pointer is to invalid memory, add 1 byte to the
     // address to account for the case some bytes of the address are
     // valid but the others are not (address lies on a page boundary).
-    if (is_kernel_vaddr((void*)(args[i]+3))) {
+    if (is_kernel_vaddr((void*)(&args[i]+1))) {
       // Referencing kernel memory.
+      break;
+    }
+    if (pagedir_get_page(active_pd(), (void*)(&args[i]+1)) == NULL) {
+      // Referencing memory not in the page directory
       break;
     }
   }
@@ -142,8 +148,11 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
    */
 
 //  printf("System call number: %d\n", args[0]);
-
-  //TODO: Validate args[0]
+  
+  // Validates args[0]; the case where the stack is too large
+  if (f->ebp - (uint32_t)f->esp > 4096) {
+    handle_exit(-1);
+  }
 
   switch (args[0]) {
     case SYS_PRACTICE:
