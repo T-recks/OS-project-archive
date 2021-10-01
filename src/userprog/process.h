@@ -36,7 +36,7 @@ struct process {
 /* 
 Structure the file descriptors into a list. */
 struct file_data {
-  struct file* f;                    /* File pointer */
+  struct file* file;             /* File pointer */
   int fd;                     /* File descriptor of this file */
   int ref_cnt;                /* How many processes have this file open */
   struct list_elem elem;      /* List element for all files list */
