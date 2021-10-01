@@ -293,7 +293,6 @@ static void run_task(char** argv) {
   list_push_back(pcb->waits, &ws->elem);
   ws->pid = process_execute(task, ws);
   process_wait(ws->pid);
-  free(ws);
 #endif
   printf("Execution of '%s' complete.\n", task);
 }
