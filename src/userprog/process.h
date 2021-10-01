@@ -28,6 +28,22 @@ struct process {
   char process_name[16];      /* Name of the main thread */
   struct thread* main_thread; /* Pointer to main thread */
   struct list* argv;
+  struct wait_status *ws;     /* Wait status struct of the parent */
+  struct list* waits;         /* List of children this process' children */
+};
+
+/* Shared between a parent and a child, one for each newly created child
+ * Need 2 semaphores because wait() waits for the process to exit, while
+ * exec() waits for the process to load. */
+struct wait_status {
+  struct semaphore sema_wait;   /* Semaphore to indicate the process has exited */
+  struct semaphore sema_load;   /* Semaphore to indicate the process has loaded */
+  struct lock lock;             /* Lock to avoid race conditions with ref_cnt */
+  int ref_cnt;                  /* Number of active processes; initialize to 2 */
+  int exit_code;                /* Exit code of child, if applicable */
+  int pid;                      /* pid of the child */
+  bool loaded;                  /* Child should set this to true after loading*/
+  struct list_elem elem;
 };
 
 /*
@@ -40,7 +56,7 @@ typedef struct word {
 
 void userprog_init(void);
 
-pid_t process_execute(const char* file_name);
+pid_t process_execute(const char* file_name, struct wait_status* ws);
 int process_wait(pid_t);
 void process_exit(void);
 void process_activate(void);

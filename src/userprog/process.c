@@ -21,7 +21,7 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 
-static struct semaphore temporary;
+static struct wait_status ws;
 static thread_func start_process NO_RETURN;
 static bool load(const char* file_name, void (**eip)(void), void** esp);
 
@@ -49,17 +49,19 @@ void userprog_init(void) {
    FILENAME.  The new thread may be scheduled (and may even exit)
    before process_execute() returns.  Returns the new process's
    process id, or TID_ERROR if the thread cannot be created. */
-pid_t process_execute(const char* file_name) {
+pid_t process_execute(const char* file_name, struct wait_status* wait_status) {
   char* fn_copy;
   tid_t tid;
 
-  sema_init(&temporary, 0);
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
   fn_copy = palloc_get_page(0);
   if (fn_copy == NULL)
     return TID_ERROR;
   strlcpy(fn_copy, file_name, PGSIZE);
+  
+  // Set the global ws here so the process can access it in start_process
+  ws = *wait_status;
 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create(file_name, PRI_DEFAULT, start_process, fn_copy);
@@ -111,12 +113,21 @@ static void start_process(void* file_name_) {
     free(pcb_to_free);
   }
 
+  // Share the parent's wait struct with the child
+  t->pcb->ws = &ws;
+  
   /* Clean up. Exit on failure or jump to userspace */
   palloc_free_page(file_name);
   if (!success) {
-    sema_up(&temporary);
+    // So the parent doesn't keep waiting if the child fails to load
+    sema_up(&t->pcb->ws->sema_load);
+    t->pcb->ws->ref_cnt -= 1;
     thread_exit();
   }
+  
+  // Indicate to the parent that this process has successfully loaded
+  sema_up(&t->pcb->ws->sema_load);
+  t->pcb->ws->loaded = true;
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -138,8 +149,29 @@ static void start_process(void* file_name_) {
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 int process_wait(pid_t child_pid UNUSED) {
-  sema_down(&temporary);
-  return 0;
+  struct list *waits = thread_current()->pcb->waits;
+  struct list_elem *e;
+  struct wait_status *w;
+  // Find the correct child (if any) from the list of children
+  for (e = list_begin(waits); e!= list_end(waits); e = list_next(e)) {
+    w = list_entry(e, struct wait_status, elem);
+    if (w->pid == child_pid) {
+      break;
+    }
+  }
+  if (e == list_end(waits)) {
+    // Not a direct child of the calling process
+    return -1;
+  }
+  // Down the waiting semaphore of the child
+  sema_down(&w->sema_wait);
+  // After waking, store the exit code from the shared data
+  int exit_code = w->exit_code;
+  // Remove the child from the list to ensure wait() can't be called twice
+  list_remove(e);
+  // Destroy the shared data (child dead and parent has its information)
+  free(w);
+  return exit_code;
 }
 
 /* Free the current process's resources. */
@@ -177,7 +209,6 @@ void process_exit(void) {
   cur->pcb = NULL;
   free(pcb_to_free);
 
-  sema_up(&temporary);
   thread_exit();
 }
 
@@ -287,6 +318,10 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
   // initialize argv list
   t->pcb->argv = (struct list*)malloc(sizeof(struct list));
   list_init(t->pcb->argv);
+  
+  // Initialize the child wait list
+  t->pcb->waits = (struct list*)malloc(sizeof(struct list));
+  list_init(t->pcb->waits);
 
   // add each arg to the argv list & increment argc
   char *token, *save_ptr;
@@ -535,7 +570,7 @@ static bool setup_stack(void** esp) {
   if (kpage != NULL) {
     success = install_page(((uint8_t*)PHYS_BASE) - PGSIZE, kpage, true);
     if (success) {
-      *esp = PHYS_BASE - 20;
+      *esp = PHYS_BASE;
     }
     else
       palloc_free_page(kpage);
