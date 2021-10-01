@@ -23,14 +23,16 @@ static void handle_exit(int status) {
   lock_acquire(&pcb->ws->lock);
   // Store the exit code into wait_status
   pcb->ws->exit_code = status;
-  // Up the semaphore so the parent can read the shared data
+  // Up both semaphores so the parent can read the shared data
   sema_up(&pcb->ws->sema_wait);
+  sema_up(&pcb->ws->sema_load);
   // Decrement the ref count of this wait_status
   pcb->ws->ref_cnt -= 1;
+  lock_release(&pcb->ws->lock);
   if (pcb->ws->ref_cnt == 0) {
+    // TODO: not thread safe
     free(pcb->ws);
   }
-  lock_release(&pcb->ws->lock);
   // Decrement the ref count of each of the child waiters
   struct list_elem *e;
   struct wait_status *w;
@@ -38,11 +40,12 @@ static void handle_exit(int status) {
     w = list_entry(e, struct wait_status, elem);
     lock_acquire(&w->lock);
     w->ref_cnt -= 1;
+    // TODO: not thread safe
+    lock_release(&w->lock);
     if (w->ref_cnt == 0) {
       // Free each one whose ref count hits 0
       free(w);
     }
-    lock_release(&w->lock);
   }
   process_exit();
 }
@@ -54,6 +57,8 @@ static int handle_exec(const char *cmd_line) {
   sema_init(&ws->sema_load, 0);
   sema_init(&ws->sema_wait, 0);
   lock_init(&ws->lock);
+  ws->loaded = false;
+  ws->ref_cnt = 2;
   
   // TODO: validate the args, should that go in process.c?
   pid_t pid = process_execute(cmd_line, ws);
@@ -66,7 +71,6 @@ static int handle_exec(const char *cmd_line) {
     // Add the child to the list of active children
     struct list_elem *e = (struct list_elem*)malloc(sizeof(struct list_elem));
     ws->elem = *e;
-    ws->ref_cnt = 1;
     ws->loaded = true;
     ws->pid = pid;
     list_push_back(thread_current()->pcb->waits, &ws->elem);
@@ -101,9 +105,10 @@ static int handle_write(uint32_t* args) {
  * */
 static void validate_args(struct intr_frame* f, uint32_t* args, int n) {
   // TODO: How to tell if the pointer is to a buffer
-  int i = 0;
-  for (; i != n; i++) {
-    if (!(void*)args[i]) {
+  int i = 1;
+  for (; i != n+1; i++) {
+    if ((void*)args[i] == NULL && args[0] != SYS_EXIT) {
+      // exit(0) is a successfull exit
       if (n == -1) {
         // exec() called and null pointer found
         return;
@@ -119,7 +124,7 @@ static void validate_args(struct intr_frame* f, uint32_t* args, int n) {
       break;
     }
   }
-  if (i != n) {
+  if (i != n+1) {
     // Invalid memory access, terminate the process
     f->eax = -1;
     handle_exit(-1);
@@ -136,7 +141,7 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
    * include it in your final submission.
    */
 
-  printf("System call number: %d\n", args[0]);
+//  printf("System call number: %d\n", args[0]);
 
   //TODO: Validate args[0]
 
@@ -154,6 +159,7 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       handle_exit(args[1]);
       break;
     case SYS_EXEC:
+      validate_args(f, args, 1);
       f->eax = handle_exec((char*)args[1]);
       break;
     case SYS_WAIT:

@@ -21,7 +21,7 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 
-static struct wait_status ws;
+static struct wait_status *ws;
 static thread_func start_process NO_RETURN;
 static bool load(const char* file_name, void (**eip)(void), void** esp);
 
@@ -61,12 +61,16 @@ pid_t process_execute(const char* file_name, struct wait_status* wait_status) {
   strlcpy(fn_copy, file_name, PGSIZE);
   
   // Set the global ws here so the process can access it in start_process
-  ws = *wait_status;
+  ws = wait_status;
 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create(file_name, PRI_DEFAULT, start_process, fn_copy);
-  if (tid == TID_ERROR)
+  if (tid == TID_ERROR) {
     palloc_free_page(fn_copy);
+    ws->ref_cnt -= 1;
+    sema_up(&ws->sema_load);
+    sema_up(&ws->sema_wait);
+  }
   return tid;
 }
 
@@ -114,20 +118,21 @@ static void start_process(void* file_name_) {
   }
 
   // Share the parent's wait struct with the child
-  t->pcb->ws = &ws;
+  t->pcb->ws = ws;
   
   /* Clean up. Exit on failure or jump to userspace */
   palloc_free_page(file_name);
   if (!success) {
     // So the parent doesn't keep waiting if the child fails to load
-    sema_up(&t->pcb->ws->sema_load);
     t->pcb->ws->ref_cnt -= 1;
+    sema_up(&t->pcb->ws->sema_load);
+    sema_up(&t->pcb->ws->sema_wait);
     thread_exit();
   }
   
   // Indicate to the parent that this process has successfully loaded
-  sema_up(&t->pcb->ws->sema_load);
   t->pcb->ws->loaded = true;
+  sema_up(&t->pcb->ws->sema_load);
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in

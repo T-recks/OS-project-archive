@@ -286,7 +286,7 @@ static void run_task(char** argv) {
   lock_init(&ws->lock);
   struct list_elem *e = (struct list_elem*)malloc(sizeof(struct list_elem));
   ws->elem = *e;
-  ws->ref_cnt = 1;
+  ws->ref_cnt = 2;
   ws->loaded = false;
   
   // Add the process as a child to the kernel process
