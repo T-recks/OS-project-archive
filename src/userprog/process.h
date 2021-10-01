@@ -30,6 +30,16 @@ struct process {
   struct list* argv;
   struct wait_status *ws;     /* Wait status struct of the parent */
   struct list* waits;         /* List of children this process' children */
+  struct list* open_files;     /* All files opened by this process */
+};
+
+/* 
+Structure the file descriptors into a list. */
+struct file_data {
+  file* f;                    /* File pointer */
+  int fd;                     /* File descriptor of this file */
+  int ref_cnt;                /* How many processes have this file open */
+  struct list_elem elem;      /* List element for all files list */
 };
 
 /* Shared between a parent and a child, one for each newly created child
