@@ -175,6 +175,9 @@ start:
 	addl $LOADER_PHYS_BASE, %esp
 	movl $0, %ebp			# Null-terminate main()'s backtrace
 
+# Init FPU
+	finit
+
 #### Call main().
 
 	call main
