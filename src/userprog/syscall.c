@@ -105,9 +105,16 @@ static int handle_write(uint32_t* args) {
  * memory allocated by process_start; being the thread and page directory.
  * */
 static void validate_args(struct intr_frame* f, uint32_t* args, int n) {
-  // TODO: How to tell if the pointer is to a buffer
-  
   int i = 1;
+  
+  if (args[0] == SYS_EXEC) {
+    // Argument is a pointer, make sure it's valid
+    if (args[1] == NULL || pagedir_get_page(active_pd(), (void*)args[1]) == NULL) {
+      f->eax = -1;
+      handle_exit(-1);
+    }
+  }
+  
   for (; i != n+1; i++) {
     if ((void*)args[i] == NULL && args[0] != SYS_EXIT) {
       // exit(0) is a successfull exit
@@ -149,8 +156,8 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
 
 //  printf("System call number: %d\n", args[0]);
   
-  // Validates args[0]; the case where the stack is too large
-  if (f->ebp - (uint32_t)f->esp > 4096) {
+  // Case where the stack is too large and all bytes of the esp are in invalid memory
+  if (f->ebp - (uint32_t)f->esp > 4096 && pagedir_get_page(active_pd(), (void*)(f->esp)) == NULL) {
     handle_exit(-1);
   }
 
