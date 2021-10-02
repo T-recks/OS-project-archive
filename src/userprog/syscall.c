@@ -7,6 +7,7 @@
 #include "threads/vaddr.h"
 #include "userprog/pagedir.h"
 #include "devices/shutdown.h"
+#include "lib/float.h"
 
 static void syscall_handler(struct intr_frame*);
 
@@ -94,6 +95,10 @@ static int handle_write(uint32_t* args) {
     return size;
   }
   return 0;
+}
+
+static int handle_compute_e(int n) {
+  return sys_sum_to_e(n);
 }
 
 /* Validate ARGS by ensuring each address points to valid memory.
@@ -209,6 +214,10 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       break;
     case SYS_CLOSE:
       validate_args(f, args, 1);
+      break;
+    case SYS_COMPUTE_E:
+      //TODO: Validate
+      f->eax = handle_compute_e(args[1]);
       break;
   }
 }
