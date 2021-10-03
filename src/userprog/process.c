@@ -452,6 +452,9 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
   //push a dummy (0) return address
   *esp = *esp - 4;
   memcpy(*esp, &nullptr, sizeof(void*));
+
+  //TODO: Save clean FPU to stack to be loaded in intr_exit
+
   /* Start address. */
   *eip = (void (*)(void))ehdr.e_entry;
 
