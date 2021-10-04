@@ -608,7 +608,7 @@ bool is_main_thread(struct thread* t, struct process* p) { return p->main_thread
 pid_t get_pid(struct process* p) { return (pid_t)p->main_thread->tid; }
 
 struct file_data* find_file(int fd, struct list* fd_table) {
-  struct file_data* f
+  struct file_data *f;
   for (struct list_elem* e = list_begin(fd_table); e != list_end(fd_table); e = list_next(e)) {
     f = list_entry(e, struct file_data, elem);
     if (f->fd == fd) {
