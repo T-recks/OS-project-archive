@@ -9,6 +9,8 @@
 #include "devices/shutdown.h"
 #include "threads/synch.h"
 #include "filesys/file.h"
+#include <string.h>
+#include "filesys/filesys.h"
 
 static void syscall_handler(struct intr_frame*);
 
@@ -83,14 +85,43 @@ static int handle_exec(const char* cmd_line) {
   }
 }
 
-static int handle_open(const char* filename) {
+static int handle_open(char* filename) {
+  struct list* fd_table = thread_current()->pcb->open_files;
   lock_acquire(&filesys_lock);
-  // TODO:
   // check the fd table to see if file already open
-  // if it is, incrmt ref_cnt and return the fd
+   struct list_elem* e;
+  for (e = list_begin(fd_table); e != list_end(fd_table); e = list_next(e)) {
+    struct file_data* f = list_entry(e, struct file_data, elem);
+
+    if (strcmp(f->filename, filename) == 0) {
+      // incrmt ref_cnt and return the fd
+      f->ref_cnt++;
+      lock_release(&filesys_lock);
+      return f->fd;
+    }
+  }
 
   // call filesys_open, if get NULL then handle failed open
+  struct file* new_file = filesys_open(filename);
+  if (new_file == NULL) {
+    lock_release(&filesys_lock);
+    return -1;
+  }
+
   // create a new fd table entry
+  struct file_data* fd_entry = (struct file_data*)malloc(sizeof(struct file_data));
+  fd_entry->file = new_file;
+  fd_entry->filename = filename;
+  fd_entry->ref_cnt = 1;
+  if (!list_empty(fd_table)) {
+    struct list_elem* e = list_back(fd_table);
+    struct file_data* f = list_entry(e, struct file_data, elem);
+    fd_entry->fd = f->fd + 1;
+  } else {
+    fd_entry->fd = 3;
+  }
+  list_push_back(fd_table, &fd_entry->elem);
+  return fd_entry->fd;
   lock_release(&filesys_lock);
 }
 

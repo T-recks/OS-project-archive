@@ -31,12 +31,14 @@ struct process {
   struct wait_status *ws;     /* Wait status struct of the parent */
   struct list* waits;         /* List of children this process' children */
   struct list* open_files;     /* All files opened by this process */
+// TODO: initialize open_files on process start
 };
 
 /* 
 Structure the file descriptors into a list. */
 struct file_data {
-  struct file* file;             /* File pointer */
+  struct file* file;          /* File pointer */
+  char* filename;
   int fd;                     /* File descriptor of this file */
   int ref_cnt;                /* How many processes have this file open */
   struct list_elem elem;      /* List element for all files list */
