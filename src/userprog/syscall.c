@@ -1,4 +1,3 @@
-#include <stdlib.h>
 #include "userprog/syscall.h"
 #include <stdio.h>
 #include <syscall-nr.h>
@@ -201,6 +200,7 @@ static unsigned handle_tell(int fd) {
     return position;
   }
   lock_release(&filesys_lock);
+  return -1;
 }
 
 
@@ -314,9 +314,11 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       break;
     case SYS_SEEK:
       validate_args(f, args, 2);
+      handle_seek((int)args[1], (unsigned)args[2]);
       break;
     case SYS_TELL:
       validate_args(f, args, 1);
+      f->eax = handle_tell((int)args[1]);
       break;
     case SYS_CLOSE:
       validate_args(f, args, 1);
