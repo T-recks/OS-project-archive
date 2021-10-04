@@ -159,11 +159,20 @@ static int handle_write(uint32_t* args) {
   unsigned size = (unsigned)args[3];
   char* buf = (char*)args[2];
   int fd = (int)args[1];
+  lock_acquire(&filesys_lock);
   if (fd == 1) {
     putbuf(buf, size);
     return size;
+  } else {
+      struct list* fd_table = thread_current()->pcb->open_files;
+      struct file_data *f = find_file(fd, fd_table);
+      if (f != NULL) {
+        lock_release(&filesys_lock);
+        return file_write(f->file, buf, size);
+      }
+      lock_release(&filesys_lock);
+      return -1;
   }
-  return 0;
 }
 
 /* Validate ARGS by ensuring each address points to valid memory.
