@@ -9,6 +9,7 @@
 #include "devices/shutdown.h"
 #include "threads/synch.h"
 #include "filesys/file.h"
+#include "filesys/filesys.h"
 
 static void syscall_handler(struct intr_frame*);
 
