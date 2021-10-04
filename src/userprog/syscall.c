@@ -149,21 +149,90 @@ static bool handle_close(const int fd) {
   return false;
 }
 
+static int handle_filesize(int fd) {
+  struct list* fd_table = thread_current()->pcb->open_files;
+  lock_acquire(&filesys_lock);
+  // check the fd table for the given fd, return false if not present
+  struct file_data *f = find_file(fd, fd_table);
+  if (f != NULL) {
+    int length = file_length(f->file);
+    lock_release(&filesys_lock);
+    return length;
+  }
+  lock_release(&filesys_lock);
+  return -1;
+}
+
+static int handle_read(int fd, void* buffer, unsigned size) {
+  struct list* fd_table = thread_current()->pcb->open_files;
+  lock_acquire(&filesys_lock);
+  // check the fd table for the given fd, return false if not present
+  struct file_data *f = find_file(fd, fd_table);
+  if (f != NULL) {
+    int result = file_read(f->file, buffer, size);
+    lock_release(&filesys_lock);
+    return result;
+  }
+  lock_release(&filesys_lock);
+  return -1;
+}
+
 static int handle_wait(pid_t pid) {
   int status = process_wait(pid);
   return status;
+}
+
+static bool handle_create(char* file, unsigned size) {
+  lock_acquire(&filesys_lock);
+  bool success = filesys_create(file, size);
+  lock_release(&filesys_lock);
+  return success;
 }
 
 static int handle_write(uint32_t* args) {
   unsigned size = (unsigned)args[3];
   char* buf = (char*)args[2];
   int fd = (int)args[1];
+  lock_acquire(&filesys_lock);
   if (fd == 1) {
     putbuf(buf, size);
     return size;
+  } else {
+      struct list* fd_table = thread_current()->pcb->open_files;
+      struct file_data *f = find_file(fd, fd_table);
+      if (f != NULL) {
+        int result = file_write(f->file, buf, size);
+        lock_release(&filesys_lock);
+        return result;
+      }
+      lock_release(&filesys_lock);
+      return -1;
   }
-  return 0;
 }
+
+static void handle_seek(int fd, unsigned position) {
+  lock_acquire(&filesys_lock);
+  struct list* fd_table = thread_current()->pcb->open_files;
+  struct file_data *f = find_file(fd, fd_table);
+  if (f != NULL) {
+    file_seek(f->file, position);
+  }
+  lock_release(&filesys_lock);
+}
+
+static unsigned handle_tell(int fd) {
+  lock_acquire(&filesys_lock);
+  struct list* fd_table = thread_current()->pcb->open_files;
+  struct file_data *f = find_file(fd, fd_table);
+  if (f != NULL) {
+    int position = file_tell(f->file, position);
+    lock_release(&filesys_lock);
+    return position;
+  }
+  lock_release(&filesys_lock);
+  return -1;
+}
+
 
 /* Validate ARGS by ensuring each address points to valid memory.
  * Valid pointers are not null, reference below PHYS_BASE/are not
@@ -174,10 +243,17 @@ static int handle_write(uint32_t* args) {
  * memory allocated by process_start; being the thread and page directory.
  * */
 static void validate_args(struct intr_frame* f, uint32_t* args, int n) {
-  // TODO: How to tell if the pointer is to a buffer
-
   int i = 1;
-  for (; i != n + 1; i++) {
+  
+  if (args[0] == SYS_EXEC) {
+    // Argument is a pointer, make sure it's valid
+    if (args[1] == NULL || pagedir_get_page(active_pd(), (void*)args[1]) == NULL) {
+      f->eax = -1;
+      handle_exit(-1);
+    }
+  }
+  
+  for (; i != n+1; i++) {
     if ((void*)args[i] == NULL && args[0] != SYS_EXIT) {
       // exit(0) is a successfull exit
       if (n == -1) {
@@ -215,11 +291,10 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
    * when debugging. It will cause tests to fail, however, so you should not
    * include it in your final submission.
    */
-
-  //  printf("System call number: %d\n", args[0]);
-
-  // Validates args[0]; the case where the stack is too large
-  if (f->ebp - (uint32_t)f->esp > 4096) {
+//  printf("System call number: %d\n", args[0]);
+  
+  // Case where the stack is too large and all bytes of the esp are in invalid memory
+  if (f->ebp - (uint32_t)f->esp > 4096 && pagedir_get_page(active_pd(), (void*)(f->esp)) == NULL) {
     handle_exit(-1);
   }
 
@@ -246,19 +321,22 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       break;
     case SYS_CREATE:
       validate_args(f, args, 2);
+      f->eax = handle_create((char*)args[1], (unsigned)args[2]);
       break;
     case SYS_REMOVE:
       validate_args(f, args, 1);
       break;
     case SYS_OPEN:
       validate_args(f, args, 1);
-      handle_open((char*)args[1]);
+      f->eax = handle_open((char*)args[1]);
       break;
     case SYS_FILESIZE:
       validate_args(f, args, 1);
+      f->eax = handle_filesize((int)args[1]);
       break;
     case SYS_READ:
       validate_args(f, args, 3);
+      f->eax = handle_read((int)args[1], (void*)args[2], (unsigned)args[3]);
       break;
     case SYS_WRITE:
       validate_args(f, args, 3);
@@ -266,9 +344,11 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       break;
     case SYS_SEEK:
       validate_args(f, args, 2);
+      handle_seek((int)args[1], (unsigned)args[2]);
       break;
     case SYS_TELL:
       validate_args(f, args, 1);
+      f->eax = handle_tell((int)args[1]);
       break;
     case SYS_CLOSE:
       validate_args(f, args, 1);

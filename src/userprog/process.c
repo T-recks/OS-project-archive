@@ -117,19 +117,18 @@ static void start_process(void* file_name_) {
     free(pcb_to_free);
   }
 
-  // Share the parent's wait struct with the child
-  t->pcb->ws = ws;
-  
   /* Clean up. Exit on failure or jump to userspace */
   palloc_free_page(file_name);
   if (!success) {
     // So the parent doesn't keep waiting if the child fails to load
-    t->pcb->ws->ref_cnt -= 1;
-    sema_up(&t->pcb->ws->sema_load);
-    sema_up(&t->pcb->ws->sema_wait);
+    ws->ref_cnt -= 1;
+    sema_up(&ws->sema_load);
+    sema_up(&ws->sema_wait);
     thread_exit();
   }
   
+  // Share the parent's wait struct with the child
+  t->pcb->ws = ws;
   // Indicate to the parent that this process has successfully loaded
   t->pcb->ws->loaded = true;
   sema_up(&t->pcb->ws->sema_load);
@@ -606,3 +605,14 @@ bool is_main_thread(struct thread* t, struct process* p) { return p->main_thread
 
 /* Gets the PID of a process */
 pid_t get_pid(struct process* p) { return (pid_t)p->main_thread->tid; }
+
+struct file_data* find_file(int fd, struct list* fd_table) {
+  struct file_data *f;
+  for (struct list_elem* e = list_begin(fd_table); e != list_end(fd_table); e = list_next(e)) {
+    f = list_entry(e, struct file_data, elem);
+    if (f->fd == fd) {
+        return f;
+    }
+  }
+  return NULL;
+}
