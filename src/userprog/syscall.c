@@ -126,8 +126,9 @@ static int handle_filesize(int fd) {
   // check the fd table for the given fd, return false if not present
   struct file_data *f = find_file(fd, fd_table);
   if (f != NULL) {
+    int length = file_length(f->file);
     lock_release(&filesys_lock);
-    return file_length(f->file);
+    return length;
   }
   lock_release(&filesys_lock);
   return -1;
@@ -139,8 +140,9 @@ static int handle_read(int fd, void* buffer, unsigned size) {
   // check the fd table for the given fd, return false if not present
   struct file_data *f = find_file(fd, fd_table);
   if (f != NULL) {
+    int result = file_read(f->file, buffer, size);
     lock_release(&filesys_lock);
-    return file_read(f->file, buffer, size);
+    return result;
   }
   lock_release(&filesys_lock);
   return -1;
@@ -152,7 +154,10 @@ static int handle_wait(pid_t pid) {
 }
 
 static bool handle_create(char* file, unsigned size) {
-  return filesys_create(file, size);
+  lock_acquire(&filesys_lock);
+  bool success = filesys_create(file, size);
+  lock_release(&filesys_lock);
+  return success;
 }
 
 static int handle_write(uint32_t* args) {
@@ -167,8 +172,9 @@ static int handle_write(uint32_t* args) {
       struct list* fd_table = thread_current()->pcb->open_files;
       struct file_data *f = find_file(fd, fd_table);
       if (f != NULL) {
+        int result = file_write(f->file, buf, size);
         lock_release(&filesys_lock);
-        return file_write(f->file, buf, size);
+        return result;
       }
       lock_release(&filesys_lock);
       return -1;
@@ -190,9 +196,9 @@ static unsigned handle_tell(int fd) {
   struct list* fd_table = thread_current()->pcb->open_files;
   struct file_data *f = find_file(fd, fd_table);
   if (f != NULL) {
-    int pos = file_tell(f->file, position);
+    int position = file_tell(f->file, position);
     lock_release(&filesys_lock);
-    return pos;
+    return position;
   }
   lock_release(&filesys_lock);
 }
