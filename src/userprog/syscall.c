@@ -175,6 +175,29 @@ static int handle_write(uint32_t* args) {
   }
 }
 
+static void handle_seek(int fd, unsigned position) {
+  lock_acquire(&filesys_lock);
+  struct list* fd_table = thread_current()->pcb->open_files;
+  struct file_data *f = find_file(fd, fd_table);
+  if (f != NULL) {
+    file_seek(f->file, position);
+  }
+  lock_release(&filesys_lock);
+}
+
+static unsigned handle_tell(int fd) {
+  lock_acquire(&filesys_lock);
+  struct list* fd_table = thread_current()->pcb->open_files;
+  struct file_data *f = find_file(fd, fd_table);
+  if (f != NULL) {
+    int pos = file_tell(f->file, position);
+    lock_release(&filesys_lock);
+    return pos;
+  }
+  lock_release(&filesys_lock);
+}
+
+
 /* Validate ARGS by ensuring each address points to valid memory.
  * Valid pointers are not null, reference below PHYS_BASE/are not
  * in kernel memory.
