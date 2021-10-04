@@ -124,13 +124,10 @@ static int handle_filesize(int fd) {
   struct list* fd_table = thread_current()->pcb->open_files;
   lock_acquire(&filesys_lock);
   // check the fd table for the given fd, return false if not present
-  struct list_elem* e;
-  for (e = list_begin(fd_table); e != list_end(fd_table); e = list_next(e)) {
-    struct file_data* f = list_entry(e, struct file_data, elem);
-    if (f->fd == fd) {
-      lock_release(&filesys_lock);
-      return file_length(f->file);
-    }
+  struct file_data *f = find_file(fd, fd_table);
+  if (f != NULL) {
+    lock_release(&filesys_lock);
+    return file_length(f->file);
   }
   lock_release(&filesys_lock);
   return -1;
@@ -140,13 +137,10 @@ static int handle_read(int fd, void* buffer, unsigned size) {
   struct list* fd_table = thread_current()->pcb->open_files;
   lock_acquire(&filesys_lock);
   // check the fd table for the given fd, return false if not present
-  struct list_elem* e;
-  for (e = list_begin(fd_table); e != list_end(fd_table); e = list_next(e)) {
-    struct file_data* f = list_entry(e, struct file_data, elem);
-    if (f->fd == fd) {
-      lock_release(&filesys_lock);
-      return file_read(f->file, buffer, size);
-    }
+  struct file_data *f = find_file(fd, fd_table);
+  if (f != NULL) {
+    lock_release(&filesys_lock);
+    return file_read(f->file, buffer, size);
   }
   lock_release(&filesys_lock);
   return -1;
