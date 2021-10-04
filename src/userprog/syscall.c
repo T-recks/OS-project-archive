@@ -118,9 +118,29 @@ static bool handle_close(const int fd) {
   return false;
 }
 
+static int handle_filesize(int fd) {
+  struct list* fd_table = thread_current()->pcb->open_files;
+  lock_acquire(&filesys_lock);
+  // check the fd table for the given fd, return false if not present
+  struct list_elem* e;
+  for (e = list_begin(fd_table); e != list_end(fd_table); e = list_next(e)) {
+    struct file_data* f = list_entry(e, struct file_data, elem);
+    if (f->fd == fd) {
+      lock_release(&filesys_lock);
+      return file_length(f->file);
+    }
+  }
+  lock_release(&filesys_lock);
+  return -1;
+}
+
 static int handle_wait(pid_t pid) {
   int status = process_wait(pid);
   return status;
+}
+
+static bool handle_create(char* file, unsigned size) {
+  return filesys_create(file, size);
 }
 
 static int handle_write(uint32_t* args) {
@@ -215,6 +235,7 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       break;
     case SYS_CREATE:
       validate_args(f, args, 2);
+      handle_create((char*)args[1], (unsigned)args[2]);
       break;
     case SYS_REMOVE:
       validate_args(f, args, 1);
@@ -225,6 +246,7 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       break;
     case SYS_FILESIZE:
       validate_args(f, args, 1);
+      handle_filesize((int)args[1]);
       break;
     case SYS_READ:
       validate_args(f, args, 3);
