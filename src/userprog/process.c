@@ -9,6 +9,7 @@
 #include "userprog/gdt.h"
 #include "userprog/pagedir.h"
 #include "userprog/tss.h"
+#include "userprog/syscall.h"
 #include "filesys/directory.h"
 #include "filesys/file.h"
 #include "filesys/filesys.h"
@@ -133,6 +134,9 @@ static void start_process(void* file_name_) {
   t->pcb->ws->loaded = true;
   sema_up(&t->pcb->ws->sema_load);
 
+  /* fpu init */  
+  asm volatile("fninit; fsave (%0)" : : "g"(&if_.FPU) : "memory");
+
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
      threads/intr-stubs.S).  Because intr_exit takes all of its
@@ -187,15 +191,6 @@ void process_exit(void) {
   if (cur->pcb == NULL) {
     thread_exit();
     NOT_REACHED();
-  }
-
-  /*
-  Close the executable file. */
-  struct list* fd_table = thread_current()->pcb->open_files;
-  struct list_elem* e;
-  for (e = list_begin(fd_table); e != list_end(fd_table); e = list_next(e)) {
-    struct file_data* f = list_entry(e, struct file_data, elem);
-    file_close(f->file);
   }
 
   /* Destroy the current process's page directory and switch back
@@ -330,14 +325,20 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
 
   // initialize argv list
   t->pcb->argv = (struct list*)malloc(sizeof(struct list));
+  if (t->pcb->argv == NULL)
+    handle_exit(-1);
   list_init(t->pcb->argv);
 
   // Initialize the child wait list
   t->pcb->waits = (struct list*)malloc(sizeof(struct list));
+  if (t->pcb->waits == NULL)
+    handle_exit(-1);
   list_init(t->pcb->waits);
 
   // Initialize the open files list
   t->pcb->open_files = (struct list*)malloc(sizeof(struct list));
+  if (t->pcb->open_files == NULL)
+    handle_exit(-1);
   list_init(t->pcb->open_files);
 
   // add each arg to the argv list & increment argc
@@ -350,6 +351,8 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
       goto done;
     }
     arg = (struct word*)malloc(sizeof(struct word));
+    if (arg == NULL)
+      handle_exit(-1);
     arg->val = token;
     arg->len = sizeof(char) * (strlen(token) + 1);
     list_push_back(t->pcb->argv, &arg->elem);
@@ -469,6 +472,7 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
   //push a dummy (0) return address
   *esp = *esp - 4;
   memcpy(*esp, &nullptr, sizeof(void*));
+
   /* Start address. */
   *eip = (void (*)(void))ehdr.e_entry;
 
@@ -479,6 +483,8 @@ done:
   if (success) {
     struct list* fd_table = thread_current()->pcb->open_files;
     struct file_data* fd_entry = (struct file_data*)malloc(sizeof(struct file_data));
+    if (fd_entry == NULL)
+      handle_exit(-1);
     fd_entry->file = file;
     fd_entry->filename = file_name;
     fd_entry->ref_cnt = 1;

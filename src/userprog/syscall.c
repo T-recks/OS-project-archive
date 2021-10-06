@@ -8,18 +8,53 @@
 #include "threads/vaddr.h"
 #include "userprog/pagedir.h"
 #include "devices/shutdown.h"
+#include "lib/float.h"
 #include "threads/synch.h"
 #include "filesys/file.h"
 #include <string.h>
 #include "filesys/filesys.h"
 
 static void syscall_handler(struct intr_frame*);
+static bool handle_close(const int fd);
+void close_all_files(void);
+void clear_cmdline(void);
 
 struct lock filesys_lock;
 
 void syscall_init(void) {
   lock_init(&filesys_lock);
   intr_register_int(0x30, 3, INTR_ON, syscall_handler, "syscall");
+}
+
+void close_all_files(void) {
+  struct list* fd_table = thread_current()->pcb->open_files;
+  if (fd_table == NULL) {
+    return;
+  }
+  lock_acquire(&filesys_lock);
+  while (!list_empty(fd_table)) {
+    struct list_elem *e = list_pop_front(fd_table);
+    struct file_data* f = list_entry(e, struct file_data, elem);
+    file_close(f->file);
+    f->ref_cnt--;
+    if (f->ref_cnt == 0) {
+      list_remove(e);
+      free(f);
+    }
+  }
+  lock_release(&filesys_lock);
+}
+
+void clear_cmdline(void) {
+  struct list* argv = thread_current()->pcb->argv;
+  if (argv == NULL)
+    return;
+  while (!list_empty(argv)) {
+    struct list_elem *e = list_pop_front(argv);
+    struct word* w = list_entry(e, struct word, elem);
+    list_remove(e);
+    free(w);
+  }
 }
 
 static int handle_practice(int val) {
@@ -29,6 +64,9 @@ static int handle_practice(int val) {
 void handle_exit(int status) {
   struct process *pcb = thread_current()->pcb;
   printf("%s: exit(%d)\n", pcb->process_name, status);
+  if (pcb->ws == NULL) {
+    goto done;
+  }
   lock_acquire(&pcb->ws->lock);
   // Store the exit code into wait_status
   pcb->ws->exit_code = status;
@@ -41,6 +79,9 @@ void handle_exit(int status) {
   if (pcb->ws->ref_cnt == 0) {
     // TODO: not thread safe
     free(pcb->ws);
+  }
+  if (pcb->waits == NULL) {
+    goto done;
   }
   // Decrement the ref count of each of the child waiters
   struct list_elem *e;
@@ -56,6 +97,9 @@ void handle_exit(int status) {
       free(w);
     }
   }
+done:
+  close_all_files();
+  clear_cmdline();
   process_exit();
 }
 
@@ -69,12 +113,11 @@ static int handle_exec(const char *cmd_line) {
   ws->loaded = false;
   ws->ref_cnt = 2;
   
-  // TODO: validate the args, should that go in process.c?
   pid_t pid = process_execute(cmd_line, ws);
   // Wait for the child process to finish loading
   sema_down(&ws->sema_load); // Child calls sema_up in start_process
   if (pid == TID_ERROR || !ws->loaded) {
-    // TODO: free the wait status and the command lines arg
+    free(ws);
     return -1;
   } else {
     // Add the child to the list of active children
@@ -91,19 +134,6 @@ static int handle_exec(const char *cmd_line) {
 static int handle_open(char* filename) {
   struct list* fd_table = thread_current()->pcb->open_files;
   lock_acquire(&filesys_lock);
-  // check the fd table to see if file already open
-//  struct list_elem* e;
-//  for (e = list_begin(fd_table); e != list_end(fd_table); e = list_next(e)) {
-//    struct file_data* f = list_entry(e, struct file_data, elem);
-//
-//    if (strcmp(f->filename, filename) == 0) {
-//      // incrmt ref_cnt and return the fd
-//      f->ref_cnt++;
-//      lock_release(&filesys_lock);
-//      return f->fd;
-//    }
-//  }
-
   // call filesys_open, if get NULL then handle failed open
   struct file* new_file = filesys_open(filename);
   if (new_file == NULL) {
@@ -237,6 +267,10 @@ static unsigned handle_tell(int fd) {
   return -1;
 }
 
+static int handle_compute_e(int n) {
+  return sys_sum_to_e(n);
+}
+
 /* Validate ARGS by ensuring each address points to valid memory.
  * Valid pointers are not null, reference below PHYS_BASE/are not
  * in kernel memory.
@@ -269,9 +303,9 @@ static void validate_args(struct intr_frame* f, uint32_t* args, int n) {
       // exit(0) is a successfull exit, reading/writing 0 bytes is valid
       break;
     }
-//    // For checking if the pointer is to invalid memory, add 1 byte to the
-//    // address to account for the case some bytes of the address are
-//    // valid but the others are not (address lies on a page boundary).
+    // For checking if the pointer is to invalid memory, add 1 byte to the
+    // address to account for the case some bytes of the address are
+    // valid but the others are not (address lies on a page boundary).
     if (is_kernel_vaddr((void*)(&args[i]+1))) {
       // Referencing kernel memory.
       break;
@@ -360,6 +394,10 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
     case SYS_CLOSE:
       validate_args(f, args, 1);
       handle_close((int)args[1]);
+      break;
+    case SYS_COMPUTE_E:
+      //TODO: Validate
+      f->eax = handle_compute_e(args[1]);
       break;
   }
 }

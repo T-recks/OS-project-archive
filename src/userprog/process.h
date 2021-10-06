@@ -76,5 +76,6 @@ bool is_main_thread(struct thread*, struct process*);
 pid_t get_pid(struct process*);
 
 struct file_data* find_file(int fd, struct list* fd_table);
+void free_process(struct process* pcb);
 
 #endif /* userprog/process.h */
