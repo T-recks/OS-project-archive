@@ -61,6 +61,10 @@ switch_threads:
 .globl switch_entry
 .func switch_entry
 switch_entry:
+
+	# init fpu
+	fninit
+
 	# Discard switch_threads() arguments.
 	addl $8, %esp
 
