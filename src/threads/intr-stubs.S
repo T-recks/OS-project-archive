@@ -17,6 +17,10 @@
 */
 .func intr_entry
 intr_entry:
+   /* Save FPU */
+   subl $108, %esp
+   fsave (%esp)
+
 	/* Save caller's registers. */
 	pushl %ds
 	pushl %es
@@ -34,6 +38,7 @@ intr_entry:
 	/* Call interrupt handler. */
 	pushl %esp
 .globl intr_handler
+   finit /* init FPU for kernel to use */
 	call intr_handler
 	addl $4, %esp
 .endfunc
@@ -56,11 +61,15 @@ intr_exit:
 	popl %es
 	popl %ds
 
-        /* Discard `struct intr_frame' vec_no, error_code,
-           frame_pointer members. */
+   /* Discard `struct intr_frame' vec_no, error_code,
+      frame_pointer members. */
 	addl $12, %esp
 
-        /* Return to caller. */
+   /* Load FPU */
+   frstor (%esp)
+   addl $108, %esp
+
+   /* Return to caller. */
 	iret
 .endfunc
 
