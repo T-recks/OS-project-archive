@@ -176,7 +176,7 @@ start:
 	movl $0, %ebp			# Null-terminate main()'s backtrace
 
 # Init FPU
-	finit
+	fninit
 
 #### Call main().
 

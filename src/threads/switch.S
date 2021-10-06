@@ -55,7 +55,7 @@ switch_threads:
    	frstor (%esp)
    	addl $108, %esp
 
-        ret
+	ret
 .endfunc
 
 .globl switch_entry
