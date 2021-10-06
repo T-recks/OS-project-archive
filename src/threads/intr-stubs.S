@@ -19,7 +19,7 @@
 intr_entry:
    /* Save FPU */
    subl $108, %esp
-   fsave(%esp)
+   fsave (%esp)
 
 	/* Save caller's registers. */
 	pushl %ds
@@ -67,7 +67,7 @@ intr_exit:
 
    /* Load FPU */
    frstor (%esp)
-   addl $108 %esp
+   addl $108, %esp
 
    /* Return to caller. */
 	iret

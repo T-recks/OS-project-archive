@@ -26,7 +26,7 @@ switch_threads:
 
 	/* Save FPU */
    	subl $108, %esp
-   	fsave(%esp)
+   	fsave (%esp)
 
 	pushl %ebx
 	pushl %ebp
@@ -53,7 +53,7 @@ switch_threads:
 
 	/* Load FPU */
    	frstor (%esp)
-   	addl $108 %esp
+   	addl $108, %esp
 
         ret
 .endfunc
