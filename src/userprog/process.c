@@ -195,9 +195,7 @@ void process_exit(void) {
   struct list_elem* e;
   for (e = list_begin(fd_table); e != list_end(fd_table); e = list_next(e)) {
     struct file_data* f = list_entry(e, struct file_data, elem);
-    if (f->fd == 3) {
-      file_close(f->file);
-    }
+    file_close(f->file);
   }
 
   /* Destroy the current process's page directory and switch back
