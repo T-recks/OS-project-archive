@@ -9,6 +9,7 @@
 #include "userprog/gdt.h"
 #include "userprog/pagedir.h"
 #include "userprog/tss.h"
+#include "userprog/syscall.h"
 #include "filesys/directory.h"
 #include "filesys/file.h"
 #include "filesys/filesys.h"
@@ -189,15 +190,6 @@ void process_exit(void) {
     NOT_REACHED();
   }
 
-  /*
-  Close the executable file. */
-  struct list* fd_table = thread_current()->pcb->open_files;
-  struct list_elem* e;
-  for (e = list_begin(fd_table); e != list_end(fd_table); e = list_next(e)) {
-    struct file_data* f = list_entry(e, struct file_data, elem);
-    file_close(f->file);
-  }
-
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   pd = cur->pcb->pagedir;
@@ -330,14 +322,20 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
 
   // initialize argv list
   t->pcb->argv = (struct list*)malloc(sizeof(struct list));
+  if (t->pcb->argv == NULL)
+    handle_exit(-1);
   list_init(t->pcb->argv);
 
   // Initialize the child wait list
   t->pcb->waits = (struct list*)malloc(sizeof(struct list));
+  if (t->pcb->waits == NULL)
+    handle_exit(-1);
   list_init(t->pcb->waits);
 
   // Initialize the open files list
   t->pcb->open_files = (struct list*)malloc(sizeof(struct list));
+  if (t->pcb->open_files == NULL)
+    handle_exit(-1);
   list_init(t->pcb->open_files);
 
   // add each arg to the argv list & increment argc
@@ -350,6 +348,8 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
       goto done;
     }
     arg = (struct word*)malloc(sizeof(struct word));
+    if (arg == NULL)
+      handle_exit(-1);
     arg->val = token;
     arg->len = sizeof(char) * (strlen(token) + 1);
     list_push_back(t->pcb->argv, &arg->elem);
@@ -479,6 +479,8 @@ done:
   if (success) {
     struct list* fd_table = thread_current()->pcb->open_files;
     struct file_data* fd_entry = (struct file_data*)malloc(sizeof(struct file_data));
+    if (fd_entry == NULL)
+      handle_exit(-1);
     fd_entry->file = file;
     fd_entry->filename = file_name;
     fd_entry->ref_cnt = 1;
