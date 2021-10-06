@@ -38,7 +38,7 @@ intr_entry:
 	/* Call interrupt handler. */
 	pushl %esp
 .globl intr_handler
-   finit /* init FPU for kernel to use */
+    fninit /* init FPU for kernel to use */
 	call intr_handler
 	addl $4, %esp
 .endfunc

@@ -471,7 +471,7 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
   memcpy(*esp, &nullptr, sizeof(void*));
 
   //Save clean FPU to stack to be loaded in intr_exit
-  asm volatile("finit; fsave (%0)" : : "g"(*esp) : "memory");
+  asm volatile("fninit; fsave (%0)" : : "g"(*esp) : "memory");
 
   /* Start address. */
   *eip = (void (*)(void))ehdr.e_entry;
