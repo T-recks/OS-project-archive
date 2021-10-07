@@ -2,13 +2,10 @@
 use strict;
 use warnings;
 use tests::tests;
-check_expected ([<<'EOF', <<'EOF']);
-(wait-bad-pid) begin
-(wait-bad-pid) end
-wait-bad-pid: exit(0)
+check_expected ([<<'EOF']);
+(wait-diff-pid) begin
+(wait-diff-pid) end
+wait-diff-pid: exit(0)
 EOF
-(wait-bad-pid) begin
-(wait-bad-pid) end
-wait-bad-pid: exit(0)
-EOF
+
 pass;
