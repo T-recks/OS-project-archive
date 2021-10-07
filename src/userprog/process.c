@@ -134,6 +134,9 @@ static void start_process(void* file_name_) {
   t->pcb->ws->loaded = true;
   sema_up(&t->pcb->ws->sema_load);
 
+  /* fpu init */  
+  asm volatile("fninit; fsave (%0)" : : "g"(&if_.FPU) : "memory");
+
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
      threads/intr-stubs.S).  Because intr_exit takes all of its
@@ -469,9 +472,6 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
   //push a dummy (0) return address
   *esp = *esp - 4;
   memcpy(*esp, &nullptr, sizeof(void*));
-
-  //Save clean FPU to stack to be loaded in intr_exit
-  asm volatile("finit; fsave (%0)" : : "g"(*esp) : "memory");
 
   /* Start address. */
   *eip = (void (*)(void))ehdr.e_entry;

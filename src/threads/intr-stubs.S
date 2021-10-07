@@ -38,7 +38,7 @@ intr_entry:
 	/* Call interrupt handler. */
 	pushl %esp
 .globl intr_handler
-   finit /* init FPU for kernel to use */
+   fninit /* init FPU for kernel to use */
 	call intr_handler
 	addl $4, %esp
 .endfunc
@@ -61,13 +61,13 @@ intr_exit:
 	popl %es
 	popl %ds
 
-   /* Discard `struct intr_frame' vec_no, error_code,
-      frame_pointer members. */
-	addl $12, %esp
-
    /* Load FPU */
    frstor (%esp)
    addl $108, %esp
+
+   /* Discard `struct intr_frame' vec_no, error_code,
+      frame_pointer members. */
+	addl $12, %esp
 
    /* Return to caller. */
 	iret

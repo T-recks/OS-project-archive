@@ -55,12 +55,16 @@ switch_threads:
    	frstor (%esp)
    	addl $108, %esp
 
-        ret
+	ret
 .endfunc
 
 .globl switch_entry
 .func switch_entry
 switch_entry:
+
+	# init fpu
+	fninit
+
 	# Discard switch_threads() arguments.
 	addl $8, %esp
 
