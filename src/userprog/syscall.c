@@ -77,7 +77,6 @@ void handle_exit(int status) {
   pcb->ws->ref_cnt -= 1;
   lock_release(&pcb->ws->lock);
   if (pcb->ws->ref_cnt == 0) {
-    // TODO: not thread safe
     free(pcb->ws);
   }
   if (pcb->waits == NULL) {
@@ -90,7 +89,6 @@ void handle_exit(int status) {
     w = list_entry(e, struct wait_status, elem);
     lock_acquire(&w->lock);
     w->ref_cnt -= 1;
-    // TODO: not thread safe
     lock_release(&w->lock);
     if (w->ref_cnt == 0) {
       // Free each one whose ref count hits 0
