@@ -160,21 +160,18 @@ static bool handle_close(const int fd) {
   struct list* fd_table = thread_current()->pcb->open_files;
   lock_acquire(&filesys_lock);
   // check the fd table for the given fd, return false if not present
-  struct list_elem* e;
-  for (e = list_begin(fd_table); e != list_end(fd_table); e = list_next(e)) {
-    struct file_data* f = list_entry(e, struct file_data, elem);
-    if (f->fd == fd) {
-      //close file & decrement ref_cnt in fd table
-      file_close(f->file);
-      f->ref_cnt--;
-      if (f->ref_cnt == 0) {
-        // if ref_cnt is 0, remove from table and free the file_data struct
-        list_remove(e);
-        free(f);
-      }
-      lock_release(&filesys_lock);
-      return true;
+  struct file_data* f = find_file(fd, fd_table);
+  if (f != NULL) {
+    //close file & decrement ref_cnt in fd table
+    file_close(f->file);
+    f->ref_cnt--;
+    if (f->ref_cnt == 0) {
+      // if ref_cnt is 0, remove from table and free the file_data struct
+      list_remove(e);
+      free(f);
     }
+    lock_release(&filesys_lock);
+    return true;
   }
   lock_release(&filesys_lock);
   return false;
