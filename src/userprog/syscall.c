@@ -220,6 +220,13 @@ static bool handle_create(char* file, unsigned size) {
   return success;
 }
 
+static bool handle_remove(char* file) {
+  lock_acquire(&filesys_lock);
+  bool success = filesys_remove(file);
+  lock_release(&filesys_lock);
+  return success;
+}
+
 static int handle_write(uint32_t* args) {
   unsigned size = (unsigned)args[3];
   char* buf = (char*)args[2];
@@ -364,6 +371,7 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       break;
     case SYS_REMOVE:
       validate_args(f, args, 1);
+      f->eax = handle_remove((char*)args[1]);
       break;
     case SYS_OPEN:
       validate_args(f, args, 1);
