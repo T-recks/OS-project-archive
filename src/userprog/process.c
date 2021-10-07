@@ -156,7 +156,7 @@ static void start_process(void* file_name_) {
 
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
-int process_wait(pid_t child_pid UNUSED) {
+int process_wait(pid_t child_pid) {
   struct list* waits = thread_current()->pcb->waits;
   struct list_elem* e;
   struct wait_status* w;
