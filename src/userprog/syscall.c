@@ -15,7 +15,7 @@
 #include "filesys/filesys.h"
 
 static void syscall_handler(struct intr_frame*);
-static bool handle_close(const int fd);
+static void handle_close(const int fd);
 void close_all_files(void);
 void clear_cmdline(void);
 
@@ -156,7 +156,7 @@ static int handle_open(char* filename) {
   return fd_entry->fd;
 }
 
-static bool handle_close(const int fd) {
+static void handle_close(const int fd) {
   struct list* fd_table = thread_current()->pcb->open_files;
   lock_acquire(&filesys_lock);
   // check the fd table for the given fd, return false if not present
