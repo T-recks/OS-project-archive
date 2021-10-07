@@ -156,7 +156,7 @@ static int handle_open(char* filename) {
   return fd_entry->fd;
 }
 
-static bool handle_close(const int fd) {
+static void handle_close(const int fd) {
   struct list* fd_table = thread_current()->pcb->open_files;
   lock_acquire(&filesys_lock);
   // check the fd table for the given fd, return false if not present
@@ -170,11 +170,8 @@ static bool handle_close(const int fd) {
       list_remove(e);
       free(f);
     }
-    lock_release(&filesys_lock);
-    return true;
   }
   lock_release(&filesys_lock);
-  return false;
 }
 
 static int handle_filesize(int fd) {
