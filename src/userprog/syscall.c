@@ -20,6 +20,7 @@ void close_all_files(void);
 void clear_cmdline(void);
 static void handle_practice(struct intr_frame*, unsigned*);
 static void handle_compute_e(struct intr_frame*, unsigned*);
+static void handle_write(struct intr_frame* f, unsigned* args);
 
 struct lock filesys_lock;
 
@@ -36,6 +37,10 @@ void syscall_init(void) {
   hp->arity = 1;
   hp->fn = &handle_compute_e;
   handler_table[SYS_COMPUTE_E] = hp;
+  hp = malloc(sizeof(handler));
+  hp->arity = 3;
+  hp->fn = &handle_write;
+  handler_table[SYS_WRITE] = hp;
 }
 
 void close_all_files(void) {
@@ -239,7 +244,7 @@ static bool handle_remove(char* file) {
   return success;
 }
 
-static int handle_write(uint32_t* args) {
+static void handle_write(struct intr_frame* frame, unsigned* args) {
   unsigned size = (unsigned)args[3];
   char* buf = (char*)args[2];
   int fd = (int)args[1];
@@ -247,17 +252,20 @@ static int handle_write(uint32_t* args) {
   if (fd == 1) {
     putbuf(buf, size);
     lock_release(&filesys_lock);
-    return size;
+    frame->eax = size;
+    return;
   } else {
     struct list* fd_table = thread_current()->pcb->open_files;
     struct file_data *f = find_file(fd, fd_table);
     if (f != NULL) {
       int result = file_write(f->file, buf, size);
       lock_release(&filesys_lock);
-      return result;
+      frame->eax = result;
+      return;
     }
     lock_release(&filesys_lock);
-    return -1;
+    frame->eax = -1;
+    return;
   }
 }
 
@@ -357,7 +365,7 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
   }
 
   handler* h = handler_table[args[0]];
-  if (args[0] == SYS_PRACTICE || args[0] == SYS_COMPUTE_E) {
+  if (args[0] == SYS_PRACTICE || args[0] == SYS_COMPUTE_E || args[0] == SYS_WRITE) {
       validate_args(f, args, h->arity);
       h->fn(f, args);
       return;
@@ -399,10 +407,6 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
     case SYS_READ:
       validate_args(f, args, 3);
       f->eax = handle_read((int)args[1], (void*)args[2], (unsigned)args[3]);
-      break;
-    case SYS_WRITE:
-      validate_args(f, args, 3);
-      f->eax = handle_write(args);
       break;
     case SYS_SEEK:
       validate_args(f, args, 2);
