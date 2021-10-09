@@ -19,6 +19,7 @@ static bool handle_close(const int fd);
 void close_all_files(void);
 void clear_cmdline(void);
 static void handle_practice(struct intr_frame*, unsigned*);
+static void handle_compute_e(struct intr_frame*, unsigned*);
 
 struct lock filesys_lock;
 
@@ -31,6 +32,10 @@ void syscall_init(void) {
   hp->arity = 1;
   hp->fn = &handle_practice;
   handler_table[SYS_PRACTICE] = hp;
+  hp = malloc(sizeof(handler));
+  hp->arity = 1;
+  hp->fn = &handle_compute_e;
+  handler_table[SYS_COMPUTE_E] = hp;
 }
 
 void close_all_files(void) {
@@ -65,8 +70,7 @@ void clear_cmdline(void) {
 }
 
 static void handle_practice(struct intr_frame* f, unsigned* argv) {
-    int val = (int)argv[1];
-    f->eax = val + 1;
+    f->eax = (int)argv[1] + 1;
 }
 
 void handle_exit(int status) {
@@ -280,8 +284,8 @@ static unsigned handle_tell(int fd) {
   return -1;
 }
 
-static int handle_compute_e(int n) {
-  return sys_sum_to_e(n);
+static void handle_compute_e(struct intr_frame* f, unsigned* argv) {
+    f->eax = sys_sum_to_e((int)argv[1]);
 }
 
 /* Validate ARGS by ensuring each address points to valid memory.
@@ -353,15 +357,13 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
   }
 
   handler* h = handler_table[args[0]];
-  
-
-  switch (args[0]) {
-    case SYS_PRACTICE:
+  if (args[0] == SYS_PRACTICE || args[0] == SYS_COMPUTE_E) {
       validate_args(f, args, h->arity);
       h->fn(f, args);
-      /* validate_args(f, args, 1); */
-      /* f->eax = handle_practice(args[1]); */
-      break;
+      return;
+  }
+
+  switch (args[0]) {
     case SYS_HALT:
       shutdown_power_off();
       break;
@@ -413,10 +415,6 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
     case SYS_CLOSE:
       validate_args(f, args, 1);
       handle_close((int)args[1]);
-      break;
-    case SYS_COMPUTE_E:
-      //TODO: Validate
-      f->eax = handle_compute_e(args[1]);
       break;
   }
 }
