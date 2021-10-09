@@ -30,7 +30,7 @@ void syscall_init(void) {
   handler *hp = malloc(sizeof(handler));
   hp->arity = 1;
   hp->fn = &handle_practice;
-  handler_table[SYS_PRACTICE] = &hp;
+  handler_table[SYS_PRACTICE] = hp;
 }
 
 void close_all_files(void) {

@@ -7,7 +7,7 @@ void syscall_init(void);
 void handle_exit(int status);
 
 typedef struct handler {
-    void (*fn)(struct intr_frame*, void*);
+    void (*fn)(struct intr_frame*, unsigned*);
     int arity;
 } handler;
 
