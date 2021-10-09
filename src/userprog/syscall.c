@@ -18,12 +18,19 @@ static void syscall_handler(struct intr_frame*);
 static bool handle_close(const int fd);
 void close_all_files(void);
 void clear_cmdline(void);
+static void handle_practice(struct intr_frame*, unsigned*);
 
 struct lock filesys_lock;
+
+handler* handler_table[SYS_LAST - SYS_FIRST + 1];
 
 void syscall_init(void) {
   lock_init(&filesys_lock);
   intr_register_int(0x30, 3, INTR_ON, syscall_handler, "syscall");
+  handler *hp = malloc(sizeof(handler));
+  hp->arity = 1;
+  hp->fn = &handle_practice;
+  handler_table[SYS_PRACTICE] = &hp;
 }
 
 void close_all_files(void) {
@@ -57,8 +64,9 @@ void clear_cmdline(void) {
   }
 }
 
-static int handle_practice(int val) {
-  return val + 1;
+static void handle_practice(struct intr_frame* f, unsigned* argv) {
+    int val = (int)argv[1];
+    f->eax = val + 1;
 }
 
 void handle_exit(int status) {
@@ -344,10 +352,15 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
     handle_exit(-1);
   }
 
+  handler* h = handler_table[args[0]];
+  
+
   switch (args[0]) {
     case SYS_PRACTICE:
-      validate_args(f, args, 1);
-      f->eax = handle_practice(args[1]);
+      validate_args(f, args, h->arity);
+      h->fn(f, args);
+      /* validate_args(f, args, 1); */
+      /* f->eax = handle_practice(args[1]); */
       break;
     case SYS_HALT:
       shutdown_power_off();
