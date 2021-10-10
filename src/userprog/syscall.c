@@ -29,18 +29,22 @@ handler* handler_table[SYS_LAST - SYS_FIRST + 1];
 void syscall_init(void) {
   lock_init(&filesys_lock);
   intr_register_int(0x30, 3, INTR_ON, syscall_handler, "syscall");
-  handler *hp = malloc(sizeof(handler));
-  hp->arity = 1;
-  hp->fn = &handle_practice;
-  handler_table[SYS_PRACTICE] = hp;
-  hp = malloc(sizeof(handler));
-  hp->arity = 1;
-  hp->fn = &handle_compute_e;
-  handler_table[SYS_COMPUTE_E] = hp;
-  hp = malloc(sizeof(handler));
-  hp->arity = 3;
-  hp->fn = &handle_write;
-  handler_table[SYS_WRITE] = hp;
+  /* handler *hp = malloc(sizeof(handler)); */
+  handler h = { &handle_practice, 1 };
+  /* hp->arity = 1; */
+  /* hp->fn = &handle_practice; */
+  handler_table[SYS_PRACTICE] = &h;
+  handler h = { &handle_compute_e, 1 };
+  /* hp = malloc(sizeof(handler)); */
+  /* hp->arity = 1; */
+  /* hp->fn = &handle_compute_e; */
+  handler_table[SYS_COMPUTE_E] = h;
+  handler h = { &handle_write, 3 };
+  /* handler_table[SYS_WRITE] = (handler*){ &handle_write, 3 }; */
+  /* hp = malloc(sizeof(handler)); */
+  /* hp->arity = 3; */
+  /* hp->fn = &handle_write; */
+  handler_table[SYS_WRITE] = &h;
 }
 
 void close_all_files(void) {
