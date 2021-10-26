@@ -17,6 +17,8 @@
 #error TIMER_FREQ <= 1000 recommended
 #endif
 
+struct list sleepers_list;
+
 /* Number of timer ticks since OS booted. */
 static int64_t ticks;
 
@@ -33,6 +35,7 @@ static void real_time_delay(int64_t num, int32_t denom);
 /* Sets up the timer to interrupt TIMER_FREQ times per second,
    and registers the corresponding interrupt. */
 void timer_init(void) {
+  list_init(&sleepers_list);
   pit_configure_channel(0, 2, TIMER_FREQ);
   intr_register_ext(0x20, timer_interrupt, "8254 Timer");
 }
@@ -79,8 +82,34 @@ void timer_sleep(int64_t ticks) {
   int64_t start = timer_ticks();
 
   ASSERT(intr_get_level() == INTR_ON);
-  while (timer_elapsed(start) < ticks)
-    thread_yield();
+
+  if (ticks <= 0) {
+    return;
+  }
+
+  struct thread* t = thread_current();
+  t->expiration_time = timer_ticks() + ticks;
+  // Need to disable interrupts to add to the list of sleeping threads
+  intr_disable();
+  if (list_empty(&sleepers_list)) {
+    list_push_back(&sleepers_list, &t->elem);
+  } else {
+    // Keep the ordering of the list
+    struct list_elem* cur;
+    for (cur = list_begin(&sleepers_list); cur != list_end(&sleepers_list); cur = list_next(cur)) {
+      struct thread* st = list_entry(cur, struct thread, elem);
+      if (st->expiration_time > t->expiration_time) {
+        list_insert(&st->elem, &t->elem);
+        break;
+      }
+    }
+    // Thread needs to be put at the back of the list
+    if (cur == list_end(&sleepers_list)) {
+      list_push_back(&sleepers_list, &t->elem);
+    }
+  }
+  thread_block();
+  intr_enable();
 }
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be
@@ -129,6 +158,22 @@ void timer_print_stats(void) { printf("Timer: %" PRId64 " ticks\n", timer_ticks(
 static void timer_interrupt(struct intr_frame* args UNUSED) {
   ticks++;
   thread_tick();
+  struct list_elem* head;
+  while (!list_empty(&sleepers_list)) {
+    // 344 ticks then infinite loop
+    head = list_front(&sleepers_list);
+    struct thread* st = list_entry(head, struct thread, elem);
+    if (st->expiration_time <= ticks) {
+      // Thread ready to wake up
+      list_pop_front(&sleepers_list);
+      if (st->priority > thread_current()->priority) {
+        intr_yield_on_return();
+      }
+      thread_unblock(st);
+    } else {
+      return;
+    }
+  }
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer

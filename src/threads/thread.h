@@ -88,7 +88,14 @@ struct thread {
   char name[16];             /* Name (for debugging purposes). */
   uint8_t* stack;            /* Saved stack pointer. */
   int priority;              /* Priority. */
+  int expiration_time;       /* When this thread should be woken up */
   struct list_elem allelem;  /* List element for all threads list. */
+
+  struct thread*
+      donating_to; // pointer to thread that this thread is donating its priority to. NULL if not donating
+  struct lock* blocked_on; // pointer to lock this thread is blocking on. NULL if not blocked
+  struct list
+      priorities; // list of priority values in order of when they were donated to the thread (includes original priority)
 
   /* Shared between thread.c and synch.c. */
   struct list_elem elem; /* List element. */
@@ -102,10 +109,27 @@ struct thread {
   unsigned magic; /* Detects stack overflow. */
 };
 
-/* If false (default), use round-robin scheduler.
-   If true, use multi-level feedback queue scheduler.
-   Controlled by kernel command-line option "-o mlfqs". */
-extern bool thread_mlfqs;
+struct inherited_priority {
+  int priority;           // priority value
+  struct lock* from_lock; // the lock from which this thread inherited
+  struct list_elem elem;  // able to put in list
+};
+
+/* Types of scheduler that the user can request the kernel
+ * use to schedule threads at runtime. */
+enum sched_policy {
+  SCHED_FIFO,  // First-in, first-out scheduler
+  SCHED_PRIO,  // Strict-priority scheduler with round-robin tiebreaking
+  SCHED_FAIR,  // Implementation-defined fair scheduler
+  SCHED_MLFQS, // Multi-level Feedback Queue Scheduler
+};
+#define SCHED_DEFAULT SCHED_FIFO
+
+/* Determines which scheduling policy the kernel should use.
+ * Controller by the kernel command-line options
+ *  "-sched-default", "-sched-fair", "-sched-mlfqs", "-sched-fifo"
+ * Is equal to SCHED_FIFO by default. */
+extern enum sched_policy active_sched_policy;
 
 void thread_init(void);
 void thread_start(void);
@@ -137,5 +161,7 @@ int thread_get_nice(void);
 void thread_set_nice(int);
 int thread_get_recent_cpu(void);
 int thread_get_load_avg(void);
+
+void donate_priority(struct thread* from, struct thread* to, struct lock* lock);
 
 #endif /* threads/thread.h */
