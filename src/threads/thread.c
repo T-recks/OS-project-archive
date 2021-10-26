@@ -24,6 +24,8 @@
    that are ready to run but not actually running. */
 static struct list fifo_ready_list;
 
+static struct list prio_ready_list;
+
 /* List of all processes.  Processes are added to this list
    when they are first scheduled and removed when they exit. */
 static struct list all_list;
