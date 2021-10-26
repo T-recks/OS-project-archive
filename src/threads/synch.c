@@ -159,6 +159,8 @@ void lock_init(struct lock* lock) {
 
   lock->holder = NULL;
   sema_init(&lock->semaphore, 1);
+  list_init(&lock->waiters);
+  lock->most_recent = NULL;
 }
 
 /* Acquires LOCK, sleeping until it becomes available if
@@ -174,7 +176,22 @@ void lock_acquire(struct lock* lock) {
   ASSERT(!intr_context());
   ASSERT(!lock_held_by_current_thread(lock));
 
+  struct thread* t = thread_current();
+  if (lock->holder != NULL) {
+    // Lock is busy, donate priority if necessary
+    t->blocked_on = lock;
+    donate_priority(t, lock->most_recent, lock);
+    list_push_front(&lock->waiters, &t->elem);
+  }
+  // Set the head of the donation chain
+  lock->most_recent = t;
+  // If the lock was busy, this will block the thread
   sema_down(&lock->semaphore);
+  //  struct list_elem *e = list_max(&lock->waiters, func, aux);
+  //  struct thread *thread_to_sched = list_entry(e, struct thread, elem);
+  //  thread_to_sched->blocked_on = NULL;
+  //  thread_to_sched->donating_to = NULL;
+
   lock->holder = thread_current();
 }
 
