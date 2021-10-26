@@ -487,27 +487,26 @@ static struct thread* thread_schedule_fifo(void) {
     return idle_thread;
 }
 
-static bool less_list_thread(const struct list_elem* e1, const struct list_elem* e2, void* aux) {
-    /* TODO */
-    bool (*f)(struct thread*, struct thread*) = aux;
-    return f(list_entry(e1, struct thread, elem),
-             list_entry(e2, struct thread, elem));
+bool less_list_thread(const struct list_elem* e1, const struct list_elem* e2, void* aux) {
+  /* TODO */
+  bool (*f)(struct thread*, struct thread*) = aux;
+  return f(list_entry(e1, struct thread, elem), list_entry(e2, struct thread, elem));
 }
 
-static bool less_prio(const struct thread* t1, const struct thread* t2) {
-    return t1->priority < t2->priority;
+bool less_prio(const struct thread* t1, const struct thread* t2) {
+  return t1->priority < t2->priority;
 }
 
 /* Strict priority scheduler */
 static struct thread* thread_schedule_prio(void) {
-    if (!list_empty(&prio_ready_list)) {
-        struct list_elem *e = list_max(&prio_ready_list, less_list_thread, less_prio);
-        list_remove(e);
-        return list_entry(e, struct thread, elem);
-    } else {
-        return idle_thread;
-    }
-    /* PANIC("Unimplemented scheduler policy: \"-sched=prio\""); */
+  if (!list_empty(&prio_ready_list)) {
+    struct list_elem* e = list_max(&prio_ready_list, less_list_thread, less_prio);
+    list_remove(e);
+    return list_entry(e, struct thread, elem);
+  } else {
+    return idle_thread;
+  }
+  /* PANIC("Unimplemented scheduler policy: \"-sched=prio\""); */
 }
 
 /* Fair priority scheduler */

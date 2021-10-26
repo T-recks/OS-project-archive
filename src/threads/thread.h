@@ -164,4 +164,7 @@ int thread_get_load_avg(void);
 
 void donate_priority(struct thread* from, struct thread* to, struct lock* lock);
 
+bool less_list_thread(const struct list_elem* e1, const struct list_elem* e2, void* aux);
+bool less_prio(const struct thread* t1, const struct thread* t2);
+
 #endif /* threads/thread.h */
