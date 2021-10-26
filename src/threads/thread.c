@@ -498,7 +498,7 @@ static bool less_prio(const struct thread* t1, const struct thread* t2) {
 
 /* Strict priority scheduler */
 static struct thread* thread_schedule_prio(void) {
-    if (!list_empty(&fifo_ready_list)) {
+    if (!list_empty(&prio_ready_list)) {
         struct list_elem *e = list_max(&prio_ready_list, less_list_thread, less_prio);
         list_remove(e);
         return list_entry(e, struct thread, elem);
