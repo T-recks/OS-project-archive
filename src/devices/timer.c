@@ -103,6 +103,10 @@ void timer_sleep(int64_t ticks) {
         break;
       }
     }
+    // Thread needs to be put at the back of the list
+    if (cur == list_end(&sleepers_list)) {
+      list_push_back(&sleepers_list, &t->elem);
+    }
   }
   thread_block();
   intr_enable();
