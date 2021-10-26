@@ -468,6 +468,10 @@ void thread_schedule_tail(struct thread* prev) {
   }
 }
 
+void thread_enqueue(struct thread t) {
+    list_push_front(&prio_ready_list, &t->elem);
+}
+
 /* Schedules a new process.  At entry, interrupts must be off and
    the running process's state must have been changed from
    running to some other state.  This function finds another
