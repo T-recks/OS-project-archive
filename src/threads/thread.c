@@ -211,6 +211,11 @@ tid_t thread_create(const char* name, int priority, thread_func* function, void*
   /* Add to run queue. */
   thread_unblock(t);
 
+  // Preempt the current thread if the newly created thread's priority is higher
+  if (priority > thread_current()->priority) {
+    thread_block();
+  }
+
   return tid;
 }
 
@@ -238,8 +243,29 @@ static void thread_enqueue(struct thread* t) {
 
   if (active_sched_policy == SCHED_FIFO)
     list_push_back(&fifo_ready_list, &t->elem);
-  else
+  else if (active_sched_policy == SCHED_PRIO || active_sched_policy == SCHED_FAIR) {
+    list_push_back(&prio_ready_list, &t->elem);
+  } else
     PANIC("Unimplemented scheduling policy value: %d", active_sched_policy);
+}
+
+void donate_priority(struct thread* from, struct thread* to, struct lock* lock) {
+  if (from->priority < to->priority) {
+    struct inherited_priority* ip = malloc(sizeof(struct inherited_priority));
+    struct list_elem* e = malloc(sizeof(struct list_elem));
+    ip->priority = from->priority;
+    ip->from_lock = lock;
+    ip->elem = *e;
+
+    // Set to's priority and push new priority on to list of to's donated priorites
+    list_push_back(&to->priorities, &ip->elem);
+    to->priority = from->priority;
+  }
+
+  // To is already waiting for the lock as well; may need to donate priority to next waiter
+  if (to->status == THREAD_BLOCKED && to->donating_to != NULL) {
+    donate_priority(to, to->donating_to, lock);
+  }
 }
 
 /* Transitions a blocked thread T to the ready-to-run state.
