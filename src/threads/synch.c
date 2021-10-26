@@ -31,6 +31,7 @@
 #include <string.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
+#include "threads/malloc.h"
 
 /* Initializes semaphore SEMA to VALUE.  A semaphore is a
    nonnegative integer along with two atomic operators for
@@ -159,7 +160,6 @@ void lock_init(struct lock* lock) {
 
   lock->holder = NULL;
   sema_init(&lock->semaphore, 1);
-  list_init(&lock->waiters);
   lock->most_recent = NULL;
 }
 
@@ -181,18 +181,23 @@ void lock_acquire(struct lock* lock) {
     // Lock is busy, donate priority if necessary
     t->blocked_on = lock;
     donate_priority(t, lock->most_recent, lock);
-    list_push_front(&lock->waiters, &t->elem);
+    list_push_front(&lock->semaphore.waiters, &t->elem);
   }
   // Set the head of the donation chain
   lock->most_recent = t;
+
   // If the lock was busy, this will block the thread
   sema_down(&lock->semaphore);
-  //  struct list_elem *e = list_max(&lock->waiters, func, aux);
-  //  struct thread *thread_to_sched = list_entry(e, struct thread, elem);
-  //  thread_to_sched->blocked_on = NULL;
-  //  thread_to_sched->donating_to = NULL;
 
-  lock->holder = thread_current();
+  // Schedule the waiting thread with the highest priority
+  struct list_elem* e = list_max(&lock->semaphore.waiters, less_list_thread, less_prio);
+  struct thread* thread_to_sched = list_entry(e, struct thread, elem);
+  list_remove(&thread_to_sched->elem);
+  thread_to_sched->blocked_on = NULL;
+  thread_to_sched->donating_to = NULL;
+
+  // Lock should now be held by thread with the highest priority
+  lock->holder = thread_to_sched;
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
@@ -221,6 +226,31 @@ bool lock_try_acquire(struct lock* lock) {
 void lock_release(struct lock* lock) {
   ASSERT(lock != NULL);
   ASSERT(lock_held_by_current_thread(lock));
+
+  struct thread* t = thread_current();
+
+  // Set the thread's priority to its initial priority
+  struct list_elem* ih_elem = list_pop_back(&t->priorities);
+  struct inherited_priority* ip = list_entry(ih_elem, struct inherited_priority, elem);
+  t->priority = ip->priority;
+
+  // TODO: Clear the list of priorities donated as a result of holding this lock
+  while (!list_empty(&t->priorities)) {
+    struct list_elem* e = list_front(&t->priorities);
+    struct inherited_priority* donation = list_entry(e, struct inherited_priority, elem);
+    if (e == list_end(&t->priorities)) {
+      if (donation->from_lock == lock) {
+        free(donation);
+      }
+      break;
+    }
+    if (donation->from_lock == lock) {
+      free(donation);
+    }
+  }
+
+  // Add the initial priority back into the list of priorities
+  list_push_front(&t->priorities, ih_elem);
 
   lock->holder = NULL;
   sema_up(&lock->semaphore);
