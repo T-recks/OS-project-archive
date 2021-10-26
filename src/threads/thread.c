@@ -110,6 +110,7 @@ void thread_init(void) {
 
   lock_init(&tid_lock);
   list_init(&fifo_ready_list);
+  list_init(&prio_ready_list);
   list_init(&all_list);
 
   /* Set up a thread structure for the running thread. */
@@ -458,6 +459,7 @@ static void init_thread(struct thread* t, const char* name, int priority) {
   t->priority = priority;
   t->pcb = NULL;
   t->magic = THREAD_MAGIC;
+  list_init(&t->priorities);
 
   old_level = intr_disable();
   list_push_back(&all_list, &t->allelem);
@@ -495,7 +497,7 @@ bool less_prio(const struct thread* t1, const struct thread* t2) {
 
 /* Strict priority scheduler */
 static struct thread* thread_schedule_prio(void) {
-  if (!list_empty(&fifo_ready_list)) {
+  if (!list_empty(&prio_ready_list)) {
     struct list_elem* e = list_max(&prio_ready_list, less_list_thread, less_prio);
     list_remove(e);
     return list_entry(e, struct thread, elem);
