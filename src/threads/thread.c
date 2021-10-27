@@ -359,7 +359,28 @@ void thread_foreach(thread_action_func* func, void* aux) {
 }
 
 /* Sets the current thread's priority to NEW_PRIORITY. */
-void thread_set_priority(int new_priority) { thread_current()->priority = new_priority; }
+void thread_set_priority(int new_priority) {
+  struct thread *t = thread_current();
+  
+  // Must be protected so that priorities in the tree cannot change while priorities
+  // are being recomputed
+  intr_disable();
+  
+  t->priority = new_priority;
+  // TODO: what to do if new_priority is lower than the current priority and this thread was donating?
+  // Update the donation chain (if necessary)
+  if (t->donating_to != NULL) {
+    donate_priority(t, t->donating_to, t->donating_to->blocked_on);
+  }
+  struct thread *thread_max_prio = list_entry(list_max(&prio_ready_list, less_list_thread, less_prio), struct thread, elem);
+  
+  // Yield to the scheduler if this is not longer the highest priority thread
+  if (thread_max_prio->priority > t->priority) {
+    thread_yield();
+  }
+  
+  intr_enable();
+}
 
 /* Returns the current thread's priority. */
 int thread_get_priority(void) { return thread_current()->priority; }
