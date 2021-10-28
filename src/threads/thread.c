@@ -11,6 +11,7 @@
 #include "threads/switch.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
+#include "threads/malloc.h"
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -184,7 +185,6 @@ tid_t thread_create(const char* name, int priority, thread_func* function, void*
   tid_t tid;
 
   ASSERT(function != NULL);
-
   /* Allocate thread. */
   t = palloc_get_page(PAL_ZERO);
   if (t == NULL)
@@ -211,6 +211,11 @@ tid_t thread_create(const char* name, int priority, thread_func* function, void*
 
   /* Add to run queue. */
   thread_unblock(t);
+  
+  struct inherited_priority *ip = malloc(sizeof(struct inherited_priority));
+  ip->priority = priority;
+  ip->from_lock = NULL;
+  list_push_back(&t->priorities, &ip->elem);
 
   // Preempt the current thread if the newly created thread's priority is higher
   if (priority > thread_current()->priority) {
@@ -255,10 +260,11 @@ static void thread_enqueue(struct thread* t) {
 void donate_priority(struct thread* from, struct thread* to, struct lock* lock) {
   if (from->priority < to->priority) {
     struct inherited_priority* ip = malloc(sizeof(struct inherited_priority));
-    struct list_elem* e = malloc(sizeof(struct list_elem));
+    // TODO: necessary to initialize the list element?
+//    struct list_elem* e = malloc(sizeof(struct list_elem));
+//    ip->elem = *e;
     ip->priority = from->priority;
     ip->from_lock = lock;
-    ip->elem = *e;
 
     // Set to's priority and push new priority on to list of to's donated priorites
     list_push_back(&to->priorities, &ip->elem);
@@ -510,11 +516,20 @@ static struct thread* thread_schedule_fifo(void) {
 
 bool less_list_thread(const struct list_elem* e1, const struct list_elem* e2, void* aux) {
   /* TODO */
-  bool (*f)(struct thread*, struct thread*) = aux;
+  bool (*f)(const struct thread*, const struct thread*) = aux;
   return f(list_entry(e1, struct thread, elem), list_entry(e2, struct thread, elem));
 }
 
+bool less_list_sema_waiter(const struct list_elem* e1, const struct list_elem* e2, void* aux) {
+  bool (*f)(struct thread*, struct thread*) = aux;
+  return f(list_entry(e1, struct thread, sema_elem), list_entry(e2, struct thread, sema_elem));
+}
+
 bool less_prio(const struct thread* t1, const struct thread* t2) {
+  return t1->priority < t2->priority;
+}
+
+bool less_prio_inherited(const struct inherited_priority* t1, const struct inherited_priority* t2) {
   return t1->priority < t2->priority;
 }
 

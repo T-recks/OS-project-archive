@@ -97,6 +97,9 @@ struct thread {
 
   /* Shared between thread.c and synch.c. */
   struct list_elem elem; /* List element. */
+  
+  struct list_elem proc_elem; /* List element for threads spawned by this process list */
+  struct list_elem sema_elem; /* List element for threads waiting for a lock */
 
 #ifdef USERPROG
   /* Owned by process.c. */
@@ -163,6 +166,8 @@ int thread_get_load_avg(void);
 void donate_priority(struct thread* from, struct thread* to, struct lock* lock);
 
 bool less_list_thread(const struct list_elem* e1, const struct list_elem* e2, void* aux);
+bool less_list_sema_waiter(const struct list_elem* e1, const struct list_elem* e2, void* aux);
 bool less_prio(const struct thread* t1, const struct thread* t2);
+bool less_prio_inherited(const struct inherited_priority* t1, const struct inherited_priority* t2);
 
 #endif /* threads/thread.h */
