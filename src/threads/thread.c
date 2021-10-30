@@ -258,7 +258,7 @@ static void thread_enqueue(struct thread* t) {
 }
 
 void donate_priority(struct thread* from, struct thread* to, struct lock* lock) {
-  if (from->priority < to->priority) {
+  if (from->priority > to->priority) {
     struct inherited_priority* ip = malloc(sizeof(struct inherited_priority));
     // TODO: necessary to initialize the list element?
 //    struct list_elem* e = malloc(sizeof(struct list_elem));
