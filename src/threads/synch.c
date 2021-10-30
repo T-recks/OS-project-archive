@@ -184,6 +184,11 @@ void lock_init(struct lock* lock) {
   lock->most_recent = NULL;
 }
 
+void lock_init_named(struct lock* lock, const char* name) {
+  strlcpy(lock->name, name, sizeof lock->name);
+  lock_init(lock);
+}
+
 /* Acquires LOCK, sleeping until it becomes available if
    necessary.  The lock must not already be held by the current
    thread.
