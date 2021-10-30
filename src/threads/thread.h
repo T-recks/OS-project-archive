@@ -97,9 +97,11 @@ struct thread {
 
   /* Shared between thread.c and synch.c. */
   struct list_elem elem; /* List element. */
-  
+
+  int tickets;           //Tickets for lottery scheduler
   struct list_elem proc_elem; /* List element for threads spawned by this process list */
   struct list_elem sema_elem; /* List element for threads waiting for a lock */
+
 
 #ifdef USERPROG
   /* Owned by process.c. */
