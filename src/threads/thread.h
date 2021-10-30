@@ -92,6 +92,7 @@ struct thread {
 
   /* Shared between thread.c and synch.c. */
   struct list_elem elem; /* List element. */
+  int tickets;           //Tickets for lottery scheduler
 
 #ifdef USERPROG
   /* Owned by process.c. */

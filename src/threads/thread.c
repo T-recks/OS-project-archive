@@ -23,6 +23,7 @@
 /* List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
 static struct list fifo_ready_list;
+static struct list prio_ready_list;
 
 /* List of all processes.  Processes are added to this list
    when they are first scheduled and removed when they exit. */
@@ -52,6 +53,7 @@ static long long user_ticks;   /* # of timer ticks in user programs. */
 /* Scheduling. */
 #define TIME_SLICE 4          /* # of timer ticks to give each thread. */
 static unsigned thread_ticks; /* # of timer ticks since last yield. */
+static int sum_tickets;       /* # of total tickets assigned to threads. */
 
 static void init_thread(struct thread*, const char* name, int priority);
 static bool is_thread(struct thread*) UNUSED;
@@ -60,6 +62,7 @@ static void schedule(void);
 static void thread_enqueue(struct thread* t);
 static tid_t allocate_tid(void);
 void thread_switch_tail(struct thread* prev);
+int tickets_from_priority(int priority);
 
 static void kernel_thread(thread_func*, void* aux);
 static void idle(void* aux UNUSED);
@@ -108,6 +111,7 @@ void thread_init(void) {
 
   lock_init(&tid_lock);
   list_init(&fifo_ready_list);
+  list_init(&prio_ready_list);
   list_init(&all_list);
 
   /* Set up a thread structure for the running thread. */
@@ -222,6 +226,7 @@ void thread_block(void) {
   ASSERT(!intr_context());
   ASSERT(intr_get_level() == INTR_OFF);
 
+  sum_tickets -= thread_current()->tickets;
   thread_current()->status = THREAD_BLOCKED;
   schedule();
 }
@@ -236,7 +241,9 @@ static void thread_enqueue(struct thread* t) {
 
   if (active_sched_policy == SCHED_FIFO)
     list_push_back(&fifo_ready_list, &t->elem);
-  else
+  else if (active_sched_policy == SCHED_PRIO || active_sched_policy == SCHED_FAIR) {
+    list_push_back(&prio_ready_list, &t->elem);
+  } else
     PANIC("Unimplemented scheduling policy value: %d", active_sched_policy);
 }
 
@@ -257,6 +264,7 @@ void thread_unblock(struct thread* t) {
   ASSERT(t->status == THREAD_BLOCKED);
   thread_enqueue(t);
   t->status = THREAD_READY;
+  sum_tickets += t->tickets;
   intr_set_level(old_level);
 }
 
@@ -293,6 +301,7 @@ void thread_exit(void) {
      when it calls thread_switch_tail(). */
   intr_disable();
   list_remove(&thread_current()->allelem);
+  sum_tickets -= thread_current()->tickets;
   thread_current()->status = THREAD_DYING;
   schedule();
   NOT_REACHED();
@@ -431,6 +440,8 @@ static void init_thread(struct thread* t, const char* name, int priority) {
   t->pcb = NULL;
   t->magic = THREAD_MAGIC;
 
+  t->tickets = tickets_from_priority(priority);
+
   old_level = intr_disable();
   list_push_back(&all_list, &t->allelem);
   intr_set_level(old_level);
@@ -462,8 +473,25 @@ static struct thread* thread_schedule_prio(void) {
 
 /* Fair priority scheduler */
 static struct thread* thread_schedule_fair(void) {
-  PANIC("Unimplemented scheduler policy: \"-sched=fair\"");
+  if (!list_empty(&prio_ready_list)) {
+    int r = (random_ulong() % sum_tickets) + 1;
+    int sum = 0;
+
+    for (struct list_elem* e = list_begin(&prio_ready_list); e != list_end(&prio_ready_list);
+         e = list_next(e)) {
+      struct thread* t = list_entry(e, struct thread, elem);
+      sum += t->tickets;
+      if (sum >= r) {
+        return t;
+      }
+    }
+    return idle_thread;
+  } else {
+    return idle_thread;
+  }
 }
+
+int tickets_from_priority(int priority) { return priority + 1; }
 
 /* Multi-level feedback queue scheduler */
 static struct thread* thread_schedule_mlfqs(void) {
