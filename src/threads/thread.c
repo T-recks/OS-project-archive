@@ -118,6 +118,7 @@ void thread_init(void) {
   initial_thread = running_thread();
   init_thread(initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
+  sum_tickets += initial_thread->tickets;
   initial_thread->tid = allocate_tid();
 }
 
@@ -477,15 +478,18 @@ static struct thread* thread_schedule_fair(void) {
     int r = (random_ulong() % sum_tickets) + 1;
     int sum = 0;
 
-    for (struct list_elem* e = list_begin(&prio_ready_list); e != list_end(&prio_ready_list);
-         e = list_next(e)) {
+    struct list_elem* e;
+
+    for (e = list_begin(&prio_ready_list); e != list_end(&prio_ready_list); e = list_next(e)) {
       struct thread* t = list_entry(e, struct thread, elem);
       sum += t->tickets;
       if (sum >= r) {
+        list_remove(e);
         return t;
       }
     }
-    return idle_thread;
+    // should never reach here
+    NOT_REACHED();
   } else {
     return idle_thread;
   }
