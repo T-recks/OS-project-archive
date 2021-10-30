@@ -56,7 +56,7 @@ static long long user_ticks;   /* # of timer ticks in user programs. */
 /* Scheduling. */
 #define TIME_SLICE 4          /* # of timer ticks to give each thread. */
 static unsigned thread_ticks; /* # of timer ticks since last yield. */
-static int sum_tickets;       /* # of total tickets assigned to threads. */
+static int total_tickets;     /* # of total tickets assigned to threads. */
 
 static void init_thread(struct thread*, const char* name, int priority);
 static void init_prio_list(struct thread*, int priority);
@@ -122,7 +122,6 @@ void thread_init(void) {
   initial_thread = running_thread();
   init_thread(initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
-  sum_tickets += initial_thread->tickets;
   initial_thread->tid = allocate_tid();
 }
 
@@ -139,7 +138,7 @@ void thread_start(void) {
 
   /* Wait for the idle thread to initialize idle_thread. */
   sema_down(&idle_started);
-  
+
   init_prio_list(initial_thread, PRI_DEFAULT);
 }
 
@@ -217,10 +216,10 @@ tid_t thread_create(const char* name, int priority, thread_func* function, void*
   sf->ebp = 0;
 
   init_prio_list(t, priority);
-  
+
   /* Add to run queue. */
   thread_unblock(t); // Thread last line the created thread is guaranteed to run!
-  
+
   // Preempt the current thread if the newly created thread's priority is higher
   if (priority > thread_current()->priority) {
     enum intr_level old_level = intr_disable();
@@ -241,7 +240,6 @@ void thread_block(void) {
   ASSERT(!intr_context());
   ASSERT(intr_get_level() == INTR_OFF);
 
-  sum_tickets -= thread_current()->tickets;
   thread_current()->status = THREAD_BLOCKED;
   schedule();
 }
@@ -258,6 +256,7 @@ static void thread_enqueue(struct thread* t) {
     list_push_back(&fifo_ready_list, &t->elem);
   else if (active_sched_policy == SCHED_PRIO || active_sched_policy == SCHED_FAIR) {
     list_push_back(&prio_ready_list, &t->elem);
+    total_tickets += t->tickets;
   } else
     PANIC("Unimplemented scheduling policy value: %d", active_sched_policy);
 }
@@ -266,17 +265,17 @@ void donate_priority(struct thread* from, struct thread* to, struct lock* lock) 
   if (from->priority > to->priority) {
     struct inherited_priority* ip = malloc(sizeof(struct inherited_priority));
     // TODO: necessary to initialize the list element?
-//    struct list_elem* e = malloc(sizeof(struct list_elem));
-//    ip->elem = *e;
+    //    struct list_elem* e = malloc(sizeof(struct list_elem));
+    //    ip->elem = *e;
     ip->priority = from->priority;
     ip->from_lock = lock;
-    
+
     from->donating_to = to;
 
     // Set to's priority and push new priority on to list of to's donated priorites
     list_push_back(&to->priorities, &ip->elem);
     to->priority = from->priority;
-    
+
     // To is already waiting for the lock as well; may need to donate priority to next waiter
     if (to->status == THREAD_BLOCKED && to->donating_to != NULL) {
       donate_priority(to, to->donating_to, lock);
@@ -301,7 +300,6 @@ void thread_unblock(struct thread* t) {
   ASSERT(t->status == THREAD_BLOCKED);
   thread_enqueue(t);
   t->status = THREAD_READY;
-  sum_tickets += t->tickets;
   intr_set_level(old_level);
 }
 
@@ -338,7 +336,6 @@ void thread_exit(void) {
      when it calls thread_switch_tail(). */
   intr_disable();
   list_remove(&thread_current()->allelem);
-  sum_tickets -= thread_current()->tickets;
   thread_current()->status = THREAD_DYING;
   schedule();
   NOT_REACHED();
@@ -375,33 +372,34 @@ void thread_foreach(thread_action_func* func, void* aux) {
 
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void thread_set_priority(int new_priority) {
-  struct thread *t = thread_current();
-  
+  struct thread* t = thread_current();
+
   // Must be protected so that priorities in the tree cannot change while priorities
   // are being recomputed
   intr_disable();
-  
+
   // Update the old base priority with the new one (base always first in list)
   struct list_elem* e = list_begin(&t->priorities);
-  struct inherited_priority *base_prio = list_entry(e, struct inherited_priority, elem);
+  struct inherited_priority* base_prio = list_entry(e, struct inherited_priority, elem);
   base_prio->priority = new_priority;
-  
+
   // Priority should be the max of the new priority and donated priorities
   e = list_max(&t->priorities, less_list_thread, less_prio_inherited);
   t->priority = list_entry(e, struct inherited_priority, elem)->priority;
-  
+
   // TODO: what to do if new_priority is lower than the current priority and this thread was donating?
   // Update the donation chain (if necessary)
   if (t->donating_to != NULL) {
     donate_priority(t, t->donating_to, t->donating_to->blocked_on);
   }
-  struct thread *thread_max_prio = list_entry(list_max(&prio_ready_list, less_list_thread, less_prio), struct thread, elem);
-  
+  struct thread* thread_max_prio =
+      list_entry(list_max(&prio_ready_list, less_list_thread, less_prio), struct thread, elem);
+
   // Yield to the scheduler if this is not longer the highest priority thread
   if (thread_max_prio->priority > t->priority) {
     thread_yield();
   }
-  
+
   intr_enable();
 }
 
@@ -515,7 +513,7 @@ static void init_thread(struct thread* t, const char* name, int priority) {
 }
 
 static void init_prio_list(struct thread* t, int priority) {
-  struct inherited_priority *ip = malloc(sizeof(struct inherited_priority));
+  struct inherited_priority* ip = malloc(sizeof(struct inherited_priority));
   ip->priority = priority;
   ip->from_lock = NULL;
   list_push_back(&t->priorities, &ip->elem);
@@ -573,8 +571,8 @@ static struct thread* thread_schedule_prio(void) {
 
 /* Fair priority scheduler */
 static struct thread* thread_schedule_fair(void) {
-  if (!list_empty(&prio_ready_list)) {
-    int r = (random_ulong() % sum_tickets) + 1;
+  if (!list_empty(&prio_ready_list) && total_tickets > 0) {
+    int r = (random_ulong() % total_tickets) + 1;
     int sum = 0;
 
     struct list_elem* e;
@@ -584,6 +582,7 @@ static struct thread* thread_schedule_fair(void) {
       sum += t->tickets;
       if (sum >= r) {
         list_remove(e);
+        total_tickets -= t->tickets;
         return t;
       }
     }
