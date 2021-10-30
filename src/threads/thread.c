@@ -56,6 +56,8 @@ static long long user_ticks;   /* # of timer ticks in user programs. */
 #define TIME_SLICE 4          /* # of timer ticks to give each thread. */
 static unsigned thread_ticks; /* # of timer ticks since last yield. */
 
+static int sum_tickets;
+
 static void init_thread(struct thread*, const char* name, int priority);
 static bool is_thread(struct thread*) UNUSED;
 static void* alloc_frame(struct thread*, size_t size);
@@ -331,6 +333,7 @@ void thread_exit(void) {
   intr_disable();
   list_remove(&thread_current()->allelem);
   thread_current()->status = THREAD_DYING;
+  sum_tickets -= thread_current()->tickets;
   schedule();
   NOT_REACHED();
 }
@@ -492,6 +495,7 @@ static void init_thread(struct thread* t, const char* name, int priority) {
   list_init(&t->priorities);
 
   t->tickets = tickets_from_priority(priority);
+  sum_tickets += t->tickets;
 
   old_level = intr_disable();
   list_push_back(&all_list, &t->allelem);
@@ -551,7 +555,18 @@ static struct thread* thread_schedule_prio(void) {
 /* Fair priority scheduler */
 static struct thread* thread_schedule_fair(void) {
   if (!list_empty(&prio_ready_list)) {
+    int r = (random_ulong() % sum_tickets) + 1;
+    int sum = 0;
 
+    for (struct list_elem* e = list_begin(&prio_ready_list); e != list_end(&prio_ready_list);
+         e = list_next(e)) {
+      struct thread* t = list_entry(e, struct thread, elem);
+      sum += t->tickets;
+      if (sum >= r) {
+        return t;
+      }
+    }
+    return idle_thread;
   } else {
     return idle_thread;
   }
