@@ -134,7 +134,7 @@ static void start_process(void* file_name_) {
   t->pcb->ws->loaded = true;
   sema_up(&t->pcb->ws->sema_load);
 
-  /* fpu init */  
+  /* fpu init */
   asm volatile("fninit; fsave (%0)" : : "g"(&if_.FPU) : "memory");
 
   /* Start the user process by simulating a return from an
