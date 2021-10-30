@@ -77,7 +77,6 @@ void handle_exit(int status) {
   pcb->ws->ref_cnt -= 1;
   lock_release(&pcb->ws->lock);
   if (pcb->ws->ref_cnt == 0) {
-    // TODO: not thread safe
     free(pcb->ws);
   }
   if (pcb->waits == NULL) {
@@ -90,7 +89,6 @@ void handle_exit(int status) {
     w = list_entry(e, struct wait_status, elem);
     lock_acquire(&w->lock);
     w->ref_cnt -= 1;
-    // TODO: not thread safe
     lock_release(&w->lock);
     if (w->ref_cnt == 0) {
       // Free each one whose ref count hits 0
@@ -218,6 +216,13 @@ static int handle_wait(pid_t pid) {
 static bool handle_create(char* file, unsigned size) {
   lock_acquire(&filesys_lock);
   bool success = filesys_create(file, size);
+  lock_release(&filesys_lock);
+  return success;
+}
+
+static bool handle_remove(char* file) {
+  lock_acquire(&filesys_lock);
+  bool success = filesys_remove(file);
   lock_release(&filesys_lock);
   return success;
 }
@@ -366,6 +371,7 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       break;
     case SYS_REMOVE:
       validate_args(f, args, 1);
+      f->eax = handle_remove((char*)args[1]);
       break;
     case SYS_OPEN:
       validate_args(f, args, 1);

@@ -88,10 +88,18 @@ struct thread {
   char name[16];             /* Name (for debugging purposes). */
   uint8_t* stack;            /* Saved stack pointer. */
   int priority;              /* Priority. */
+  int expiration_time;       /* When this thread should be woken up */
   struct list_elem allelem;  /* List element for all threads list. */
+
+  struct thread* donating_to; // pointer to thread that this thread is donating its priority to. NULL if not donating
+  struct lock* blocked_on; // pointer to lock this thread is blocking on. NULL if not blocked
+  struct list priorities; // list of priority values in order of when they were donated to the thread (includes original priority)
 
   /* Shared between thread.c and synch.c. */
   struct list_elem elem; /* List element. */
+  
+  struct list_elem proc_elem; /* List element for threads spawned by this process list */
+  struct list_elem sema_elem; /* List element for threads waiting for a lock */
 
 #ifdef USERPROG
   /* Owned by process.c. */
@@ -100,6 +108,12 @@ struct thread {
 
   /* Owned by thread.c. */
   unsigned magic; /* Detects stack overflow. */
+};
+
+struct inherited_priority {
+  int priority;           // priority value
+  struct lock* from_lock; // the lock from which this thread inherited
+  struct list_elem elem;  // able to put in list
 };
 
 /* Types of scheduler that the user can request the kernel
@@ -148,5 +162,12 @@ int thread_get_nice(void);
 void thread_set_nice(int);
 int thread_get_recent_cpu(void);
 int thread_get_load_avg(void);
+
+void donate_priority(struct thread* from, struct thread* to, struct lock* lock);
+
+bool less_list_thread(const struct list_elem* e1, const struct list_elem* e2, void* aux);
+bool less_list_sema_waiter(const struct list_elem* e1, const struct list_elem* e2, void* aux);
+bool less_prio(const struct thread* t1, const struct thread* t2);
+bool less_prio_inherited(const struct inherited_priority* t1, const struct inherited_priority* t2);
 
 #endif /* threads/thread.h */
