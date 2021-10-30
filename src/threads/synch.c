@@ -178,8 +178,14 @@ void lock_init(struct lock* lock) {
   ASSERT(lock != NULL);
 
   lock->holder = NULL;
+  strlcpy(lock->name, "", sizeof lock->name);
   sema_init(&lock->semaphore, 1);
   lock->most_recent = NULL;
+}
+
+void lock_init_named(struct lock* lock, const char* name) {
+    strlcpy(lock->name, name, sizeof lock->name);
+    lock_init(lock);
 }
 
 /* Acquires LOCK, sleeping until it becomes available if
