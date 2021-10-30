@@ -24,6 +24,7 @@
 /* List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
 static struct list fifo_ready_list;
+static struct list prio_ready_list;
 
 static struct list prio_ready_list;
 
@@ -55,14 +56,17 @@ static long long user_ticks;   /* # of timer ticks in user programs. */
 /* Scheduling. */
 #define TIME_SLICE 4          /* # of timer ticks to give each thread. */
 static unsigned thread_ticks; /* # of timer ticks since last yield. */
+static int sum_tickets;       /* # of total tickets assigned to threads. */
 
 static void init_thread(struct thread*, const char* name, int priority);
+static void init_prio_list(struct thread*, int priority);
 static bool is_thread(struct thread*) UNUSED;
 static void* alloc_frame(struct thread*, size_t size);
 static void schedule(void);
 static void thread_enqueue(struct thread* t);
 static tid_t allocate_tid(void);
 void thread_switch_tail(struct thread* prev);
+int tickets_from_priority(int priority);
 
 static void kernel_thread(thread_func*, void* aux);
 static void idle(void* aux UNUSED);
@@ -118,6 +122,7 @@ void thread_init(void) {
   initial_thread = running_thread();
   init_thread(initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
+  sum_tickets += initial_thread->tickets;
   initial_thread->tid = allocate_tid();
 }
 
@@ -134,6 +139,8 @@ void thread_start(void) {
 
   /* Wait for the idle thread to initialize idle_thread. */
   sema_down(&idle_started);
+  
+  init_prio_list(initial_thread, PRI_DEFAULT);
 }
 
 /* Called by the timer interrupt handler at each timer tick.
@@ -209,19 +216,16 @@ tid_t thread_create(const char* name, int priority, thread_func* function, void*
   sf->eip = switch_entry;
   sf->ebp = 0;
 
-  /* Add to run queue. */
-  thread_unblock(t);
+  init_prio_list(t, priority);
   
-  struct inherited_priority *ip = malloc(sizeof(struct inherited_priority));
-  ip->priority = priority;
-  ip->from_lock = NULL;
-  list_push_back(&t->priorities, &ip->elem);
-
+  /* Add to run queue. */
+  thread_unblock(t); // Thread last line the created thread is guaranteed to run!
+  
   // Preempt the current thread if the newly created thread's priority is higher
   if (priority > thread_current()->priority) {
-    intr_disable();
-    thread_block();
-    intr_enable();
+    enum intr_level old_level = intr_disable();
+    thread_yield();
+    intr_set_level(old_level);
   }
 
   return tid;
@@ -237,6 +241,7 @@ void thread_block(void) {
   ASSERT(!intr_context());
   ASSERT(intr_get_level() == INTR_OFF);
 
+  sum_tickets -= thread_current()->tickets;
   thread_current()->status = THREAD_BLOCKED;
   schedule();
 }
@@ -258,22 +263,24 @@ static void thread_enqueue(struct thread* t) {
 }
 
 void donate_priority(struct thread* from, struct thread* to, struct lock* lock) {
-  if (from->priority < to->priority) {
+  if (from->priority > to->priority) {
     struct inherited_priority* ip = malloc(sizeof(struct inherited_priority));
     // TODO: necessary to initialize the list element?
 //    struct list_elem* e = malloc(sizeof(struct list_elem));
 //    ip->elem = *e;
     ip->priority = from->priority;
     ip->from_lock = lock;
+    
+    from->donating_to = to;
 
     // Set to's priority and push new priority on to list of to's donated priorites
     list_push_back(&to->priorities, &ip->elem);
     to->priority = from->priority;
-  }
-
-  // To is already waiting for the lock as well; may need to donate priority to next waiter
-  if (to->status == THREAD_BLOCKED && to->donating_to != NULL) {
-    donate_priority(to, to->donating_to, lock);
+    
+    // To is already waiting for the lock as well; may need to donate priority to next waiter
+    if (to->status == THREAD_BLOCKED && to->donating_to != NULL) {
+      donate_priority(to, to->donating_to, lock);
+    }
   }
 }
 
@@ -294,6 +301,7 @@ void thread_unblock(struct thread* t) {
   ASSERT(t->status == THREAD_BLOCKED);
   thread_enqueue(t);
   t->status = THREAD_READY;
+  sum_tickets += t->tickets;
   intr_set_level(old_level);
 }
 
@@ -330,6 +338,7 @@ void thread_exit(void) {
      when it calls thread_switch_tail(). */
   intr_disable();
   list_remove(&thread_current()->allelem);
+  sum_tickets -= thread_current()->tickets;
   thread_current()->status = THREAD_DYING;
   schedule();
   NOT_REACHED();
@@ -372,7 +381,15 @@ void thread_set_priority(int new_priority) {
   // are being recomputed
   intr_disable();
   
-  t->priority = new_priority;
+  // Update the old base priority with the new one (base always first in list)
+  struct list_elem* e = list_begin(&t->priorities);
+  struct inherited_priority *base_prio = list_entry(e, struct inherited_priority, elem);
+  base_prio->priority = new_priority;
+  
+  // Priority should be the max of the new priority and donated priorities
+  e = list_max(&t->priorities, less_list_thread, less_prio_inherited);
+  t->priority = list_entry(e, struct inherited_priority, elem)->priority;
+  
   // TODO: what to do if new_priority is lower than the current priority and this thread was donating?
   // Update the donation chain (if necessary)
   if (t->donating_to != NULL) {
@@ -490,9 +507,18 @@ static void init_thread(struct thread* t, const char* name, int priority) {
   t->magic = THREAD_MAGIC;
   list_init(&t->priorities);
 
+  t->tickets = tickets_from_priority(priority);
+
   old_level = intr_disable();
   list_push_back(&all_list, &t->allelem);
   intr_set_level(old_level);
+}
+
+static void init_prio_list(struct thread* t, int priority) {
+  struct inherited_priority *ip = malloc(sizeof(struct inherited_priority));
+  ip->priority = priority;
+  ip->from_lock = NULL;
+  list_push_back(&t->priorities, &ip->elem);
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and
@@ -547,8 +573,28 @@ static struct thread* thread_schedule_prio(void) {
 
 /* Fair priority scheduler */
 static struct thread* thread_schedule_fair(void) {
-  PANIC("Unimplemented scheduler policy: \"-sched=fair\"");
+  if (!list_empty(&prio_ready_list)) {
+    int r = (random_ulong() % sum_tickets) + 1;
+    int sum = 0;
+
+    struct list_elem* e;
+
+    for (e = list_begin(&prio_ready_list); e != list_end(&prio_ready_list); e = list_next(e)) {
+      struct thread* t = list_entry(e, struct thread, elem);
+      sum += t->tickets;
+      if (sum >= r) {
+        list_remove(e);
+        return t;
+      }
+    }
+    // should never reach here
+    NOT_REACHED();
+  } else {
+    return idle_thread;
+  }
 }
+
+int tickets_from_priority(int priority) { return priority + 1; }
 
 /* Multi-level feedback queue scheduler */
 static struct thread* thread_schedule_mlfqs(void) {

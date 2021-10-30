@@ -120,6 +120,7 @@ void sema_up(struct semaphore* sema) {
       } else {
         sema->value++;
         thread_yield();
+        return;
       }
     }
   }
@@ -179,6 +180,11 @@ void lock_init(struct lock* lock) {
   lock->holder = NULL;
   sema_init(&lock->semaphore, 1);
   lock->most_recent = NULL;
+}
+
+void lock_init_named(struct lock* lock, const char* name) {
+    strlcpy(lock->name, name, sizeof lock->name);
+    lock_init(lock);
 }
 
 /* Acquires LOCK, sleeping until it becomes available if
@@ -262,12 +268,11 @@ void lock_release(struct lock* lock) {
         free(donation);
       }
     }
-    
+
     // Set the priority to the max of donated priorities (if necessary)
     e = list_max(&t->priorities, less_list_thread, less_prio_inherited);
-    t->priority = list_entry(e, struct thread, elem)->priority;
+    t->priority = list_entry(e, struct inherited_priority, elem)->priority;
   }
-
 
   lock->holder = NULL;
   sema_up(&lock->semaphore);
@@ -418,12 +423,10 @@ void cond_signal(struct condition* cond, struct lock* lock UNUSED) {
 
   if (!list_empty(&cond->waiters)) {
     struct list_elem* e = list_max(&cond->waiters, less_list_cond_waiter, cond_less_prio);
-    sema_up(&list_entry(e, struct semaphore_elem, elem)->semaphore);
+    struct semaphore_elem* se = list_entry(e, struct semaphore_elem, elem);
+    list_remove(e);
+    sema_up(&se->semaphore);
   }
-  
-//  if (!list_empty(&cond->waiters)) {
-//    sema_up(&list_entry(list_pop_front(&cond->waiters), struct semaphore_elem, elem)->semaphore);
-//  }
 }
 
 /* Wakes up all threads, if any, waiting on COND (protected by

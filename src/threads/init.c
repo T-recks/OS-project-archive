@@ -315,18 +315,18 @@ static void run_task(char** argv) {
   printf("Executing '%s':\n", task);
 #ifdef USERPROG
   // Initialize the wait status between the kernel and process
-  struct process *pcb = thread_current()->pcb;
+  struct process* pcb = thread_current()->pcb;
   pcb->waits = (struct list*)malloc(sizeof(struct list));
   list_init(pcb->waits);
-  struct wait_status *ws = (struct wait_status*)malloc(sizeof(struct wait_status));
+  struct wait_status* ws = (struct wait_status*)malloc(sizeof(struct wait_status));
   sema_init(&ws->sema_load, 0);
   sema_init(&ws->sema_wait, 0);
   lock_init(&ws->lock);
-  struct list_elem *e = (struct list_elem*)malloc(sizeof(struct list_elem));
+  struct list_elem* e = (struct list_elem*)malloc(sizeof(struct list_elem));
   ws->elem = *e;
   ws->ref_cnt = 2;
   ws->loaded = false;
-  
+
   // Add the process as a child to the kernel process
   list_push_back(pcb->waits, &ws->elem);
   ws->pid = process_execute(task, ws);
