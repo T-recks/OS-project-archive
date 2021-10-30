@@ -11,6 +11,7 @@
 #include "threads/switch.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
+#include "threads/malloc.h"
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -23,6 +24,8 @@
 /* List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
 static struct list fifo_ready_list;
+static struct list prio_ready_list;
+
 static struct list prio_ready_list;
 
 /* List of all processes.  Processes are added to this list
@@ -56,6 +59,7 @@ static unsigned thread_ticks; /* # of timer ticks since last yield. */
 static int sum_tickets;       /* # of total tickets assigned to threads. */
 
 static void init_thread(struct thread*, const char* name, int priority);
+static void init_prio_list(struct thread*, int priority);
 static bool is_thread(struct thread*) UNUSED;
 static void* alloc_frame(struct thread*, size_t size);
 static void schedule(void);
@@ -135,6 +139,8 @@ void thread_start(void) {
 
   /* Wait for the idle thread to initialize idle_thread. */
   sema_down(&idle_started);
+  
+  init_prio_list(initial_thread, PRI_DEFAULT);
 }
 
 /* Called by the timer interrupt handler at each timer tick.
@@ -186,7 +192,6 @@ tid_t thread_create(const char* name, int priority, thread_func* function, void*
   tid_t tid;
 
   ASSERT(function != NULL);
-
   /* Allocate thread. */
   t = palloc_get_page(PAL_ZERO);
   if (t == NULL)
@@ -211,8 +216,17 @@ tid_t thread_create(const char* name, int priority, thread_func* function, void*
   sf->eip = switch_entry;
   sf->ebp = 0;
 
+  init_prio_list(t, priority);
+  
   /* Add to run queue. */
-  thread_unblock(t);
+  thread_unblock(t); // Thread last line the created thread is guaranteed to run!
+  
+  // Preempt the current thread if the newly created thread's priority is higher
+  if (priority > thread_current()->priority) {
+    enum intr_level old_level = intr_disable();
+    thread_yield();
+    intr_set_level(old_level);
+  }
 
   return tid;
 }
@@ -246,6 +260,28 @@ static void thread_enqueue(struct thread* t) {
     list_push_back(&prio_ready_list, &t->elem);
   } else
     PANIC("Unimplemented scheduling policy value: %d", active_sched_policy);
+}
+
+void donate_priority(struct thread* from, struct thread* to, struct lock* lock) {
+  if (from->priority > to->priority) {
+    struct inherited_priority* ip = malloc(sizeof(struct inherited_priority));
+    // TODO: necessary to initialize the list element?
+//    struct list_elem* e = malloc(sizeof(struct list_elem));
+//    ip->elem = *e;
+    ip->priority = from->priority;
+    ip->from_lock = lock;
+    
+    from->donating_to = to;
+
+    // Set to's priority and push new priority on to list of to's donated priorites
+    list_push_back(&to->priorities, &ip->elem);
+    to->priority = from->priority;
+    
+    // To is already waiting for the lock as well; may need to donate priority to next waiter
+    if (to->status == THREAD_BLOCKED && to->donating_to != NULL) {
+      donate_priority(to, to->donating_to, lock);
+    }
+  }
 }
 
 /* Transitions a blocked thread T to the ready-to-run state.
@@ -338,7 +374,36 @@ void thread_foreach(thread_action_func* func, void* aux) {
 }
 
 /* Sets the current thread's priority to NEW_PRIORITY. */
-void thread_set_priority(int new_priority) { thread_current()->priority = new_priority; }
+void thread_set_priority(int new_priority) {
+  struct thread *t = thread_current();
+  
+  // Must be protected so that priorities in the tree cannot change while priorities
+  // are being recomputed
+  intr_disable();
+  
+  // Update the old base priority with the new one (base always first in list)
+  struct list_elem* e = list_begin(&t->priorities);
+  struct inherited_priority *base_prio = list_entry(e, struct inherited_priority, elem);
+  base_prio->priority = new_priority;
+  
+  // Priority should be the max of the new priority and donated priorities
+  e = list_max(&t->priorities, less_list_thread, less_prio_inherited);
+  t->priority = list_entry(e, struct inherited_priority, elem)->priority;
+  
+  // TODO: what to do if new_priority is lower than the current priority and this thread was donating?
+  // Update the donation chain (if necessary)
+  if (t->donating_to != NULL) {
+    donate_priority(t, t->donating_to, t->donating_to->blocked_on);
+  }
+  struct thread *thread_max_prio = list_entry(list_max(&prio_ready_list, less_list_thread, less_prio), struct thread, elem);
+  
+  // Yield to the scheduler if this is not longer the highest priority thread
+  if (thread_max_prio->priority > t->priority) {
+    thread_yield();
+  }
+  
+  intr_enable();
+}
 
 /* Returns the current thread's priority. */
 int thread_get_priority(void) { return thread_current()->priority; }
@@ -440,12 +505,20 @@ static void init_thread(struct thread* t, const char* name, int priority) {
   t->priority = priority;
   t->pcb = NULL;
   t->magic = THREAD_MAGIC;
+  list_init(&t->priorities);
 
   t->tickets = tickets_from_priority(priority);
 
   old_level = intr_disable();
   list_push_back(&all_list, &t->allelem);
   intr_set_level(old_level);
+}
+
+static void init_prio_list(struct thread* t, int priority) {
+  struct inherited_priority *ip = malloc(sizeof(struct inherited_priority));
+  ip->priority = priority;
+  ip->from_lock = NULL;
+  list_push_back(&t->priorities, &ip->elem);
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and
@@ -467,9 +540,35 @@ static struct thread* thread_schedule_fifo(void) {
     return idle_thread;
 }
 
+bool less_list_thread(const struct list_elem* e1, const struct list_elem* e2, void* aux) {
+  /* TODO */
+  bool (*f)(const struct thread*, const struct thread*) = aux;
+  return f(list_entry(e1, struct thread, elem), list_entry(e2, struct thread, elem));
+}
+
+bool less_list_sema_waiter(const struct list_elem* e1, const struct list_elem* e2, void* aux) {
+  bool (*f)(struct thread*, struct thread*) = aux;
+  return f(list_entry(e1, struct thread, sema_elem), list_entry(e2, struct thread, sema_elem));
+}
+
+bool less_prio(const struct thread* t1, const struct thread* t2) {
+  return t1->priority < t2->priority;
+}
+
+bool less_prio_inherited(const struct inherited_priority* t1, const struct inherited_priority* t2) {
+  return t1->priority < t2->priority;
+}
+
 /* Strict priority scheduler */
 static struct thread* thread_schedule_prio(void) {
-  PANIC("Unimplemented scheduler policy: \"-sched=prio\"");
+  if (!list_empty(&prio_ready_list)) {
+    struct list_elem* e = list_max(&prio_ready_list, less_list_thread, less_prio);
+    list_remove(e);
+    return list_entry(e, struct thread, elem);
+  } else {
+    return idle_thread;
+  }
+  /* PANIC("Unimplemented scheduler policy: \"-sched=prio\""); */
 }
 
 /* Fair priority scheduler */
