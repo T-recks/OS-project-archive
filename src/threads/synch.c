@@ -265,7 +265,7 @@ void lock_release(struct lock* lock) {
     
     // Set the priority to the max of donated priorities (if necessary)
     e = list_max(&t->priorities, less_list_thread, less_prio_inherited);
-    t->priority = list_entry(e, struct thread, elem)->priority;
+    t->priority = list_entry(e, struct inherited_priority, elem)->priority;
   }
 
 
