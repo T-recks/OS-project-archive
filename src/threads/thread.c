@@ -220,7 +220,7 @@ tid_t thread_create(const char* name, int priority, thread_func* function, void*
   // Preempt the current thread if the newly created thread's priority is higher
   if (priority > thread_current()->priority) {
     intr_disable();
-    thread_block();
+    thread_yield();
     intr_enable();
   }
 
