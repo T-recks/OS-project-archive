@@ -383,7 +383,6 @@ void thread_set_priority(int new_priority) {
   e = list_max(&t->priorities, less_list_thread, less_prio_inherited);
   t->priority = list_entry(e, struct inherited_priority, elem)->priority;
   
-  // TODO: what to do if new_priority is lower than the current priority and this thread was donating?
   // Update the donation chain (if necessary)
   if (t->donating_to != NULL) {
     donate_priority(t, t->donating_to, t->donating_to->blocked_on);
@@ -531,6 +530,11 @@ static struct thread* thread_schedule_fifo(void) {
     return idle_thread;
 }
 
+struct thread* thread_max_prio_get(void) {
+  struct list_elem* e = list_max(&prio_ready_list, less_list_thread, less_prio);
+  return list_entry(e, struct thread, elem);
+}
+
 bool less_list_thread(const struct list_elem* e1, const struct list_elem* e2, void* aux) {
   /* TODO */
   bool (*f)(const struct thread*, const struct thread*) = aux;
@@ -540,6 +544,12 @@ bool less_list_thread(const struct list_elem* e1, const struct list_elem* e2, vo
 bool less_list_sema_waiter(const struct list_elem* e1, const struct list_elem* e2, void* aux) {
   bool (*f)(struct thread*, struct thread*) = aux;
   return f(list_entry(e1, struct thread, sema_elem), list_entry(e2, struct thread, sema_elem));
+}
+
+bool less_list_ip(const struct list_elem* e1, const struct list_elem* e2, void* aux) {
+  bool (*f)(struct inherited_priority*, struct inherited_priority*) = aux;
+  return f(list_entry(e1, struct inherited_priority, elem),
+           list_entry(e2, struct inherited_priority, elem));
 }
 
 bool less_prio(const struct thread* t1, const struct thread* t2) {

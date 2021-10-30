@@ -167,7 +167,9 @@ void donate_priority(struct thread* from, struct thread* to, struct lock* lock);
 
 bool less_list_thread(const struct list_elem* e1, const struct list_elem* e2, void* aux);
 bool less_list_sema_waiter(const struct list_elem* e1, const struct list_elem* e2, void* aux);
+bool less_list_ip(const struct list_elem* e1, const struct list_elem* e2, void* aux);
 bool less_prio(const struct thread* t1, const struct thread* t2);
 bool less_prio_inherited(const struct inherited_priority* t1, const struct inherited_priority* t2);
+struct thread* thread_max_prio_get(void);
 
 #endif /* threads/thread.h */

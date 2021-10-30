@@ -104,17 +104,19 @@ void sema_up(struct semaphore* sema) {
 
   old_level = intr_disable();
   
-  // Schedule the waiting thread with the highest priority
+  // Wake up the waiting thread with the highest priority
   if (!list_empty(&sema->waiters)) {
     struct list_elem* e = list_max(&sema->waiters, less_list_sema_waiter, less_prio);
-    struct thread* thread_to_sched = list_entry(e, struct thread, sema_elem);
-    list_remove(&thread_to_sched->sema_elem);
-    thread_to_sched->blocked_on = NULL;
-    thread_to_sched->donating_to = NULL;
-    thread_unblock(thread_to_sched);
+    struct thread* thread_to_acquire = list_entry(e, struct thread, sema_elem);
+    list_remove(&thread_to_acquire->sema_elem);
+    thread_to_acquire->blocked_on = NULL;
+    thread_to_acquire->donating_to = NULL;
+    thread_unblock(thread_to_acquire);
     
     // Yield to the scheduler if this is no longer the highest priority thread
-    if (thread_current()->priority < thread_to_sched->priority) {
+    struct thread* thread_highest = thread_max_prio_get();
+    
+    if (thread_current()->priority < thread_highest->priority) {
       if (intr_context()) {
         intr_yield_on_return();
       } else {
@@ -178,14 +180,8 @@ void lock_init(struct lock* lock) {
   ASSERT(lock != NULL);
 
   lock->holder = NULL;
-  strlcpy(lock->name, "", sizeof lock->name);
   sema_init(&lock->semaphore, 1);
   lock->most_recent = NULL;
-}
-
-void lock_init_named(struct lock* lock, const char* name) {
-    strlcpy(lock->name, name, sizeof lock->name);
-    lock_init(lock);
 }
 
 /* Acquires LOCK, sleeping until it becomes available if
@@ -271,7 +267,7 @@ void lock_release(struct lock* lock) {
     }
 
     // Set the priority to the max of donated priorities (if necessary)
-    e = list_max(&t->priorities, less_list_thread, less_prio_inherited);
+    e = list_max(&t->priorities, less_list_ip, less_prio_inherited);
     t->priority = list_entry(e, struct inherited_priority, elem)->priority;
   }
 
