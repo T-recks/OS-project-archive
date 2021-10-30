@@ -211,8 +211,8 @@ tid_t thread_create(const char* name, int priority, thread_func* function, void*
 
   /* Add to run queue. */
   thread_unblock(t);
-  
-  struct inherited_priority *ip = malloc(sizeof(struct inherited_priority));
+
+  struct inherited_priority* ip = malloc(sizeof(struct inherited_priority));
   ip->priority = priority;
   ip->from_lock = NULL;
   list_push_back(&t->priorities, &ip->elem);
@@ -261,8 +261,8 @@ void donate_priority(struct thread* from, struct thread* to, struct lock* lock) 
   if (from->priority < to->priority) {
     struct inherited_priority* ip = malloc(sizeof(struct inherited_priority));
     // TODO: necessary to initialize the list element?
-//    struct list_elem* e = malloc(sizeof(struct list_elem));
-//    ip->elem = *e;
+    //    struct list_elem* e = malloc(sizeof(struct list_elem));
+    //    ip->elem = *e;
     ip->priority = from->priority;
     ip->from_lock = lock;
 
@@ -366,25 +366,26 @@ void thread_foreach(thread_action_func* func, void* aux) {
 
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void thread_set_priority(int new_priority) {
-  struct thread *t = thread_current();
-  
+  struct thread* t = thread_current();
+
   // Must be protected so that priorities in the tree cannot change while priorities
   // are being recomputed
   intr_disable();
-  
+
   t->priority = new_priority;
   // TODO: what to do if new_priority is lower than the current priority and this thread was donating?
   // Update the donation chain (if necessary)
   if (t->donating_to != NULL) {
     donate_priority(t, t->donating_to, t->donating_to->blocked_on);
   }
-  struct thread *thread_max_prio = list_entry(list_max(&prio_ready_list, less_list_thread, less_prio), struct thread, elem);
-  
+  struct thread* thread_max_prio =
+      list_entry(list_max(&prio_ready_list, less_list_thread, less_prio), struct thread, elem);
+
   // Yield to the scheduler if this is not longer the highest priority thread
   if (thread_max_prio->priority > t->priority) {
     thread_yield();
   }
-  
+
   intr_enable();
 }
 
@@ -490,6 +491,8 @@ static void init_thread(struct thread* t, const char* name, int priority) {
   t->magic = THREAD_MAGIC;
   list_init(&t->priorities);
 
+  t->tickets = tickets_from_priority(priority);
+
   old_level = intr_disable();
   list_push_back(&all_list, &t->allelem);
   intr_set_level(old_level);
@@ -547,8 +550,14 @@ static struct thread* thread_schedule_prio(void) {
 
 /* Fair priority scheduler */
 static struct thread* thread_schedule_fair(void) {
-  PANIC("Unimplemented scheduler policy: \"-sched=fair\"");
+  if (!list_empty(&prio_ready_list)) {
+
+  } else {
+    return idle_thread;
+  }
 }
+
+int tickets_from_priority(int priority) { return priority + 1; }
 
 /* Multi-level feedback queue scheduler */
 static struct thread* thread_schedule_mlfqs(void) {
