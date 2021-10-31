@@ -264,6 +264,8 @@ static void thread_enqueue(struct thread* t) {
 void donate_priority(struct thread* from, struct thread* to, struct lock* lock) {
   if (from->priority > to->priority) {
     struct inherited_priority* ip = malloc(sizeof(struct inherited_priority));
+    // TODO: exit if malloc is null
+    
     // TODO: necessary to initialize the list element?
     //    struct list_elem* e = malloc(sizeof(struct list_elem));
     //    ip->elem = *e;
@@ -278,7 +280,7 @@ void donate_priority(struct thread* from, struct thread* to, struct lock* lock) 
 
     // To is already waiting for the lock as well; may need to donate priority to next waiter
     if (to->status == THREAD_BLOCKED && to->donating_to != NULL) {
-      donate_priority(to, to->donating_to, lock);
+      donate_priority(to, to->donating_to, to->blocked_on);
     }
   }
 }

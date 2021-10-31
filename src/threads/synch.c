@@ -114,13 +114,14 @@ void sema_up(struct semaphore* sema) {
     thread_unblock(thread_to_acquire);
     
     // Yield to the scheduler if this is no longer the highest priority thread
-    struct thread* thread_highest = thread_max_prio_get();
+//    struct thread* thread_highest = thread_max_prio_get();
     
-    if (thread_current()->priority < thread_highest->priority) {
+    if (thread_current()->priority < thread_to_acquire->priority) {
       if (intr_context()) {
         intr_yield_on_return();
       } else {
         sema->value++;
+        intr_set_level(old_level);
         thread_yield();
         return;
       }
@@ -181,12 +182,6 @@ void lock_init(struct lock* lock) {
 
   lock->holder = NULL;
   sema_init(&lock->semaphore, 1);
-  lock->most_recent = NULL;
-}
-
-void lock_init_named(struct lock* lock, const char* name) {
-  strlcpy(lock->name, name, sizeof lock->name);
-  lock_init(lock);
 }
 
 /* Acquires LOCK, sleeping until it becomes available if
@@ -210,10 +205,8 @@ void lock_acquire(struct lock* lock) {
   if (lock->holder != NULL) {
     // Lock is busy, donate priority if necessary
     t->blocked_on = lock;
-    donate_priority(t, lock->most_recent, lock);
+    donate_priority(t, lock->holder, lock);
   }
-  // Set the head of the donation chain
-  lock->most_recent = t;
 
   // If the lock was busy, this will block the thread
   sema_down(&lock->semaphore);
