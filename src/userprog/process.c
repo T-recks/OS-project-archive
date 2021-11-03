@@ -41,6 +41,9 @@ void userprog_init(void) {
      can come at any time and activate our pagedir */
   t->pcb = calloc(sizeof(struct process), 1);
   success = t->pcb != NULL;
+  
+  // TODO: Initialize necessary locks?
+//  lock_init(&t->pcb->lock);
 
   /* Kill the kernel if we did not succeed */
   ASSERT(success);
@@ -341,6 +344,24 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
     handle_exit(-1);
   list_init(t->pcb->open_files);
 
+  // Initialize the semaphore and lock lists
+  t->pcb->locks = (struct list*)malloc(sizeof(struct list));
+  if (t->pcb->locks == NULL)
+    handle_exit(-1);
+  list_init(t->pcb->locks);
+  t->pcb->semaphores = (struct list*)malloc(sizeof(struct list));
+  if (t->pcb->semaphores == NULL)
+    handle_exit(-1);
+  list_init(t->pcb->semaphores);
+  
+  // Initialize the list of spawned threads
+  t->pcb->threads = (struct list*)malloc(sizeof(struct list));
+  if (t->pcb->threads == NULL)
+    handle_exit(-1);
+  list_init(t->pcb->threads);
+  
+  lock_init(&t->pcb->lock);
+  
   // add each arg to the argv list & increment argc
   char *token, *save_ptr;
   int argc = 0;

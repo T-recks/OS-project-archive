@@ -48,6 +48,15 @@ struct kernel_thread_frame {
   void* aux;             /* Auxiliary data for function. */
 };
 
+struct pthread_exec_info {
+  struct process* pcb;
+  stub_fun sf;
+  pthread_fun tf;
+  void* arg;
+  struct semaphore finished;
+  bool success;
+};
+
 /* Statistics. */
 static long long idle_ticks;   /* # of timer ticks spent idle. */
 static long long kernel_ticks; /* # of timer ticks in kernel threads. */
