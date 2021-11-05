@@ -14,6 +14,7 @@
 #include "threads/malloc.h"
 #ifdef USERPROG
 #include "userprog/process.h"
+#include "userprog/gdt.h"
 #endif
 
 /* Random value for struct thread's `magic' member.
@@ -76,6 +77,7 @@ static void thread_enqueue(struct thread* t);
 static tid_t allocate_tid(void);
 void thread_switch_tail(struct thread* prev);
 int tickets_from_priority(int priority);
+void start_pthread(void* arg);
 
 static void kernel_thread(thread_func*, void* aux);
 static void idle(void* aux UNUSED);
@@ -264,14 +266,36 @@ tid_t pthread_execute(stub_fun sfun, pthread_fun tfun, const void* arg) {
   sema_down(&info->finished); // move down on start, up on finish?
 
   /* Create a new thread to execute. */
-  tid = thread_create("REPLACE ME", PRI_DEFAULT, sfun, (void*)info);
+  tid = thread_create("REPLACE ME", PRI_DEFAULT, start_pthread, (void*)info);
   return tid;
 }
 
 void start_pthread(void* arg) {
   // unpack arg into pthread_exec_info
+  struct pthread_exec_info* info = (struct pthread_exec_info*)arg;
 
-  // initialize the stack
+  struct intr_frame if_;
+  struct thread* t = thread_current();
+
+  // initialize the stack (reference load in process.c)
+
+  // initialize the interrupt frame
+  memset(&if_, 0, sizeof if_);
+  if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
+  if_.cs = SEL_UCSEG;
+  if_.eflags = FLAG_IF | FLAG_MBS;
+  // TODO: set if_.esp
+
+  if_.eip = info->sf;
+
+  /* Start the user thread by simulating a return from an
+     interrupt, implemented by intr_exit (in
+     threads/intr-stubs.S).  Because intr_exit takes all of its
+     arguments on the stack in the form of a `struct intr_frame',
+     we just point the stack pointer (%esp) to our stack frame
+     and jump to it. */
+  asm volatile("movl %0, %%esp; jmp intr_exit" : : "g"(&if_) : "memory");
+  NOT_REACHED();
 }
 
 /* Puts the current thread to sleep.  It will not be scheduled
