@@ -27,10 +27,14 @@ struct process {
   uint32_t* pagedir;          /* Page directory. */
   char process_name[16];      /* Name of the main thread */
   struct thread* main_thread; /* Pointer to main thread */
+  struct lock lock;           /* Kernel lock shared among all of this process' threads */
   struct list* argv;
   struct wait_status* ws;  /* Wait status struct of the parent */
   struct list* waits;      /* List of children this process' children */
   struct list* open_files; /* All files opened by this process */
+  struct list* locks;      /* All locks initialized by this process */
+  struct list* semaphores; /* All semaphores initialized by this process */
+  struct list* threads;    /* All theads spawned by this process */
 };
 
 /*
@@ -65,13 +69,16 @@ typedef struct word {
   struct list_elem elem;
 } word_t;
 
-struct pthread_exec_info {
-  struct process* pcb;
-  stub_fun sf;
-  pthread_fun tf;
-  void* arg;
-  struct semaphore finished;
-  bool success;
+struct user_lock {
+  char lock_user;           /* User-level lock */
+  struct lock* lock_kernel; /* Mapped kernel-level lock */
+  struct list_elem elem;
+};
+
+struct user_sema {
+  char sema_user;                /* User-level semaphore */
+  struct semaphore* sema_kernel; /* Mapped kernel-level semaphore */
+  struct list_elem elem;
 };
 
 void userprog_init(void);

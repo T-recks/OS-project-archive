@@ -48,6 +48,15 @@ struct kernel_thread_frame {
   void* aux;             /* Auxiliary data for function. */
 };
 
+struct pthread_exec_info {
+  struct process* pcb;
+  stub_fun sf;
+  pthread_fun tf;
+  void* arg;
+  struct semaphore finished;
+  bool success;
+};
+
 /* Statistics. */
 static long long idle_ticks;   /* # of timer ticks spent idle. */
 static long long kernel_ticks; /* # of timer ticks in kernel threads. */
@@ -264,6 +273,8 @@ static void thread_enqueue(struct thread* t) {
 void donate_priority(struct thread* from, struct thread* to, struct lock* lock) {
   if (from->priority > to->priority) {
     struct inherited_priority* ip = malloc(sizeof(struct inherited_priority));
+    // TODO: exit if malloc is null
+
     // TODO: necessary to initialize the list element?
     //    struct list_elem* e = malloc(sizeof(struct list_elem));
     //    ip->elem = *e;
@@ -278,7 +289,7 @@ void donate_priority(struct thread* from, struct thread* to, struct lock* lock) 
 
     // To is already waiting for the lock as well; may need to donate priority to next waiter
     if (to->status == THREAD_BLOCKED && to->donating_to != NULL) {
-      donate_priority(to, to->donating_to, lock);
+      donate_priority(to, to->donating_to, to->blocked_on);
     }
   }
 }
@@ -387,7 +398,6 @@ void thread_set_priority(int new_priority) {
   e = list_max(&t->priorities, less_list_thread, less_prio_inherited);
   t->priority = list_entry(e, struct inherited_priority, elem)->priority;
 
-  // TODO: what to do if new_priority is lower than the current priority and this thread was donating?
   // Update the donation chain (if necessary)
   if (t->donating_to != NULL) {
     donate_priority(t, t->donating_to, t->donating_to->blocked_on);
@@ -538,6 +548,11 @@ static struct thread* thread_schedule_fifo(void) {
     return idle_thread;
 }
 
+struct thread* thread_max_prio_get(void) {
+  struct list_elem* e = list_max(&prio_ready_list, less_list_thread, less_prio);
+  return list_entry(e, struct thread, elem);
+}
+
 bool less_list_thread(const struct list_elem* e1, const struct list_elem* e2, void* aux) {
   /* TODO */
   bool (*f)(const struct thread*, const struct thread*) = aux;
@@ -547,6 +562,12 @@ bool less_list_thread(const struct list_elem* e1, const struct list_elem* e2, vo
 bool less_list_sema_waiter(const struct list_elem* e1, const struct list_elem* e2, void* aux) {
   bool (*f)(struct thread*, struct thread*) = aux;
   return f(list_entry(e1, struct thread, sema_elem), list_entry(e2, struct thread, sema_elem));
+}
+
+bool less_list_ip(const struct list_elem* e1, const struct list_elem* e2, void* aux) {
+  bool (*f)(struct inherited_priority*, struct inherited_priority*) = aux;
+  return f(list_entry(e1, struct inherited_priority, elem),
+           list_entry(e2, struct inherited_priority, elem));
 }
 
 bool less_prio(const struct thread* t1, const struct thread* t2) {

@@ -42,6 +42,9 @@ void userprog_init(void) {
   t->pcb = calloc(sizeof(struct process), 1);
   success = t->pcb != NULL;
 
+  // TODO: Initialize necessary locks?
+  //  lock_init(&t->pcb->lock);
+
   /* Kill the kernel if we did not succeed */
   ASSERT(success);
 }
@@ -134,7 +137,7 @@ static void start_process(void* file_name_) {
   t->pcb->ws->loaded = true;
   sema_up(&t->pcb->ws->sema_load);
 
-  /* fpu init */  
+  /* fpu init */
   asm volatile("fninit; fsave (%0)" : : "g"(&if_.FPU) : "memory");
 
   /* Start the user process by simulating a return from an
@@ -340,6 +343,24 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
   if (t->pcb->open_files == NULL)
     handle_exit(-1);
   list_init(t->pcb->open_files);
+
+  // Initialize the semaphore and lock lists
+  t->pcb->locks = (struct list*)malloc(sizeof(struct list));
+  if (t->pcb->locks == NULL)
+    handle_exit(-1);
+  list_init(t->pcb->locks);
+  t->pcb->semaphores = (struct list*)malloc(sizeof(struct list));
+  if (t->pcb->semaphores == NULL)
+    handle_exit(-1);
+  list_init(t->pcb->semaphores);
+
+  // Initialize the list of spawned threads
+  t->pcb->threads = (struct list*)malloc(sizeof(struct list));
+  if (t->pcb->threads == NULL)
+    handle_exit(-1);
+  list_init(t->pcb->threads);
+
+  lock_init(&t->pcb->lock);
 
   // add each arg to the argv list & increment argc
   char *token, *save_ptr;
