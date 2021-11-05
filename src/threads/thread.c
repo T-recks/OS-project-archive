@@ -239,6 +239,25 @@ tid_t thread_create(const char* name, int priority, thread_func* function, void*
   return tid;
 }
 
+tid_t pthread_execute(stub_fun sfun, pthread_fun tfun, const void* arg) {
+
+  tid_t tid;
+
+  // setup stuff
+
+  /* Create a new thread to execute. */
+  tid = thread_create(file_name, PRI_DEFAULT, sfun, fn_copy);
+  if (tid == TID_ERROR) {
+    palloc_free_page(fn_copy);
+    ws->ref_cnt -= 1;
+    sema_up(&ws->sema_load);
+    sema_up(&ws->sema_wait);
+  }
+  return tid;
+}
+
+void start_pthread(void* arg) {}
+
 /* Puts the current thread to sleep.  It will not be scheduled
    again until awoken by thread_unblock().
 

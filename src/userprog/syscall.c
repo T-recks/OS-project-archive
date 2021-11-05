@@ -343,18 +343,6 @@ static unsigned handle_tell(int fd) {
 
 static int handle_compute_e(int n) { return sys_sum_to_e(n); }
 
-static tid_t handle_pthread_create() {
-  // TODO: create thread
-}
-
-static void handle_pthread_exit() {
-  // TODO: exit thread
-}
-
-static void handle_pthread_join() {
-  // TODO: join thread
-}
-
 static bool handle_lock_init(char lock) {
   // TODO: use process lock to lock these functions
   if (lock == NULL) {
