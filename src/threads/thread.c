@@ -244,7 +244,8 @@ tid_t pthread_execute(stub_fun sfun, pthread_fun tfun, const void* arg) {
   tid_t tid;
 
   // setup stuff
-  pthread_exec_info* info = (pthread_exec_info*)malloc(sizeof(pthread_exec_info));
+  struct pthread_exec_info* info =
+      (struct pthread_exec_info*)malloc(sizeof(struct pthread_exec_info));
 
   /**
    * 1. pack pthread_exec_info
@@ -263,13 +264,7 @@ tid_t pthread_execute(stub_fun sfun, pthread_fun tfun, const void* arg) {
   sema_down(&info->finished); // move down on start, up on finish?
 
   /* Create a new thread to execute. */
-  tid = thread_create(file_name, PRI_DEFAULT, sfun, fn_copy);
-  if (tid == TID_ERROR) {
-    palloc_free_page(fn_copy);
-    ws->ref_cnt -= 1;
-    sema_up(&ws->sema_load);
-    sema_up(&ws->sema_wait);
-  }
+  tid = thread_create("REPLACE ME", PRI_DEFAULT, sfun, (void*)info);
   return tid;
 }
 
