@@ -244,6 +244,23 @@ tid_t pthread_execute(stub_fun sfun, pthread_fun tfun, const void* arg) {
   tid_t tid;
 
   // setup stuff
+  pthread_exec_info* info = (pthread_exec_info*)malloc(sizeof(pthread_exec_info));
+
+  /**
+   * 1. pack pthread_exec_info
+   * struct process* pcb;
+   * stub_fun sf;
+   * pthread_fun tf;
+   * void* arg;
+   * struct semaphore finished;
+   * bool success;
+   */
+  info->pcb = thread_current()->pcb;
+  info->sf = sfun;
+  info->tf = tfun;
+  info->arg = arg;
+  sema_init(&info->finished, 1);
+  sema_down(&info->finished); // move down on start, up on finish?
 
   /* Create a new thread to execute. */
   tid = thread_create(file_name, PRI_DEFAULT, sfun, fn_copy);
@@ -256,7 +273,11 @@ tid_t pthread_execute(stub_fun sfun, pthread_fun tfun, const void* arg) {
   return tid;
 }
 
-void start_pthread(void* arg) {}
+void start_pthread(void* arg) {
+  // unpack arg into pthread_exec_info
+
+  // initialize the stack
+}
 
 /* Puts the current thread to sleep.  It will not be scheduled
    again until awoken by thread_unblock().
