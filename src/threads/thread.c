@@ -14,6 +14,8 @@
 #include "threads/malloc.h"
 #ifdef USERPROG
 #include "userprog/process.h"
+#include "userprog/gdt.h"
+#include "userprog/pagedir.h"
 #endif
 
 /* Random value for struct thread's `magic' member.
@@ -74,8 +76,10 @@ static void* alloc_frame(struct thread*, size_t size);
 static void schedule(void);
 static void thread_enqueue(struct thread* t);
 static tid_t allocate_tid(void);
+static bool setup_thread_stack(void** esp);
 void thread_switch_tail(struct thread* prev);
 int tickets_from_priority(int priority);
+void start_pthread(void* arg);
 
 static void kernel_thread(thread_func*, void* aux);
 static void idle(void* aux UNUSED);
@@ -240,61 +244,100 @@ tid_t thread_create(const char* name, int priority, thread_func* function, void*
   return tid;
 }
 
-tid_t pthread_create(void (**eip)(void), void** esp, stub_fun sfun, pthread_fun tfun, const void* arg) {
-  // 1. Allocate space for the thread's stack
-  int page_loc = PHYS_BASE - PGSIZE;
-  struct thread* t = thread_current()->pcb->main_thread;
-  void *upage = pagedir_get_page(t->pagedir, page_loc);
-  
-  // Find an unmapped page in memory
-  while (upage != NULL) {
-    page_loc -= PGSIZE;
-    upage = pagedir_get_page(t->pagedir, page_loc);
-  }
-  
-  /* Get a page of memory. */
-  uint8_t* kpage = palloc_get_page(PAL_USER);
-  if (kpage == NULL)
-    return false;
-  
-  // 49, 51, 62, 69
-  if (!install_page(upage, kpage, writable)) {
-    palloc_free_page(kpage);
-    return false;
-  }
-  
-  *esp -= upage;
-  
-  // 2. Set up the stack for the thread
-  // memcpy arg and tfun to the stack and a dummy return address
-  void* nullptr = NULL;
-  *esp = *esp - 4;
-  memcpy(*esp, &arg, sizeof(stub_fun));
-  *esp = *esp - 4;
-  memcpy(*esp, &tfun, sizeof(pthread_fun));
-  *esp = *esp - 4;
-  memcpy(*esp, &nullptr, sizeof(void*));
-  *eip = sfun
-  
-  // set tid to be the length of the list of spawned threads by the process
-}
+tid_t pthread_execute(stub_fun sfun, pthread_fun tfun, void* arg) {
+  // sys_pthread_create->pthread_execute->thread_create->start_pthread
+  tid_t tid;
 
-tid_t pthread_execute(struct pthread_exec_info info, struct join_status js) {
-  // sys_pthread_create->pthread_execute->thread_create->pthread_start_process
-  
-  tid_t tid = thread_create("name", PRI_DEFAULT, start_pthread, (void*)info);
-  
-  if (tid == TID_ERROR) {
-    js->ref_cnt -= 1;
-    sema_up(&js->sema_load);
-    sema_up(&js->sema_wait);
-  }
-  
+  // setup stuff
+  struct pthread_exec_info* info =
+      (struct pthread_exec_info*)malloc(sizeof(struct pthread_exec_info));
+
+  /**
+   * 1. pack pthread_exec_info
+   * struct process* pcb;
+   * stub_fun sf;
+   * pthread_fun tf;
+   * void* arg;
+   * struct semaphore finished;
+   * bool success;
+   */
+  info->pcb = thread_current()->pcb;
+  info->sf = sfun;
+  info->tf = tfun;
+  info->arg = arg;
+  sema_init(&info->finished, 0); // up on finish
+
+  /* Create a new thread to execute. */
+  tid = thread_create("REPLACE ME", PRI_DEFAULT, start_pthread, (void*)info);
   return tid;
 }
 
-void start_pthread(void* what) {
+void start_pthread(void* arg) {
+  // unpack arg into pthread_exec_info
+  struct pthread_exec_info* info = (struct pthread_exec_info*)arg;
 
+  struct intr_frame if_;
+  struct thread* t = thread_current();
+  t->pcb = info->pcb;
+
+  // initialize the interrupt frame
+  memset(&if_, 0, sizeof if_);
+  if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
+  if_.cs = SEL_UCSEG;
+  if_.eflags = FLAG_IF | FLAG_MBS;
+
+  // initialize the stack (reference load in process.c)
+  if (!setup_thread_stack(&if_.esp)) {
+    // TODO: do some error handling
+    return;
+  }
+
+  // argument passing — first push the void* arg,
+  // then push the pthread_fun, then push a fake RA to the stub_fun
+
+  // copy arg to stack
+  if_.esp -= sizeof(&info->arg);
+  memcpy(if_.esp, info->arg, sizeof(info->arg));
+  // copy pthread_fun to stack
+  if_.esp -= sizeof(info->tf);
+  memcpy(if_.esp, info->tf, sizeof(info->tf));
+  //push a dummy (0) return address
+  void* nullptr = NULL;
+  if_.esp -= 4;
+  memcpy(if_.esp, &nullptr, sizeof(void*));
+
+  if_.eip = info->sf;
+
+  /* Start the user thread by simulating a return from an
+     interrupt, implemented by intr_exit (in
+     threads/intr-stubs.S).  Because intr_exit takes all of its
+     arguments on the stack in the form of a `struct intr_frame',
+     we just point the stack pointer (%esp) to our stack frame
+     and jump to it. */
+  asm volatile("movl %0, %%esp; jmp intr_exit" : : "g"(&if_) : "memory");
+  NOT_REACHED();
+}
+
+/* Create a minimal stack by mapping a zeroed page to the first 
+empty page in user virtual memory. */
+static bool setup_thread_stack(void** esp) {
+  struct thread* t = thread_current();
+  *esp = PHYS_BASE - PGSIZE;
+  while (pagedir_get_page(t->pcb->pagedir, *esp) != NULL) {
+    *esp -= PGSIZE;
+  }
+
+  uint8_t* kpage;
+  bool success = false;
+  // 49, 51, 62, 69
+  kpage = palloc_get_page(PAL_USER | PAL_ZERO);
+  if (kpage != NULL) {
+    success = pagedir_set_page(t->pcb->pagedir, ((uint8_t*)*esp), kpage, true);
+    if (!success) {
+      palloc_free_page(kpage);
+    }
+  }
+  return success;
 }
 
 /* Puts the current thread to sleep.  It will not be scheduled
@@ -332,7 +375,7 @@ void donate_priority(struct thread* from, struct thread* to, struct lock* lock) 
   if (from->priority > to->priority) {
     struct inherited_priority* ip = malloc(sizeof(struct inherited_priority));
     // TODO: exit if malloc is null
-    
+
     // TODO: necessary to initialize the list element?
     //    struct list_elem* e = malloc(sizeof(struct list_elem));
     //    ip->elem = *e;
