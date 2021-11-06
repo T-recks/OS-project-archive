@@ -297,10 +297,10 @@ void start_pthread(void* arg) {
 
   // copy arg to stack
   if_.esp -= sizeof(&info->arg);
-  memcpy(if_.esp, info->arg, sizeof(info->arg));
+  memcpy(if_.esp, &info->arg, sizeof(&info->arg));
   // copy pthread_fun to stack
   if_.esp -= sizeof(info->tf);
-  memcpy(if_.esp, info->tf, sizeof(info->tf));
+  memcpy(if_.esp, &info->tf, sizeof(&info->tf));
   //push a dummy (0) return address
   void* nullptr = NULL;
   if_.esp -= 4;
