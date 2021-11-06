@@ -290,8 +290,20 @@ void start_pthread(void* arg) {
     // TODO: do some error handling
     return;
   }
-  // TODO: argument passing — first push the void* arg,
+
+  // argument passing — first push the void* arg,
   // then push the pthread_fun, then push a fake RA to the stub_fun
+
+  // copy arg to stack
+  if_.esp -= sizeof(info->arg);
+  memcpy(if_.esp, info->arg, sizeof(info->arg));
+  // copy pthread_fun to stack
+  if_.esp -= sizeof(info->tf);
+  memcpy(if_.esp, info->tf, sizeof(info->tf));
+  //push a dummy (0) return address
+  void* nullptr = NULL;
+  if_.esp -= 4;
+  memcpy(if_.esp, &nullptr, sizeof(void*));
 
   if_.eip = info->sf;
 
