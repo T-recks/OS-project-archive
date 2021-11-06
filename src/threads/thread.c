@@ -15,6 +15,7 @@
 #ifdef USERPROG
 #include "userprog/process.h"
 #include "userprog/gdt.h"
+#include "userprog/pagedir.h"
 #endif
 
 /* Random value for struct thread's `magic' member.
@@ -75,6 +76,7 @@ static void* alloc_frame(struct thread*, size_t size);
 static void schedule(void);
 static void thread_enqueue(struct thread* t);
 static tid_t allocate_tid(void);
+static bool setup_thread_stack(void** esp);
 void thread_switch_tail(struct thread* prev);
 int tickets_from_priority(int priority);
 void start_pthread(void* arg);
@@ -241,7 +243,7 @@ tid_t thread_create(const char* name, int priority, thread_func* function, void*
   return tid;
 }
 
-tid_t pthread_execute(stub_fun sfun, pthread_fun tfun, const void* arg) {
+tid_t pthread_execute(stub_fun sfun, pthread_fun tfun, void* arg) {
 
   tid_t tid;
 
@@ -277,14 +279,19 @@ void start_pthread(void* arg) {
   struct intr_frame if_;
   struct thread* t = thread_current();
 
-  // initialize the stack (reference load in process.c)
-
   // initialize the interrupt frame
   memset(&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
-  // TODO: set if_.esp
+
+  // initialize the stack (reference load in process.c)
+  if (!setup_thread_stack(&if_.esp)) {
+    // TODO: do some error handling
+    return;
+  }
+  // TODO: argument passing — first push the void* arg,
+  // then push the pthread_fun, then push a fake RA to the stub_fun
 
   if_.eip = info->sf;
 
@@ -296,6 +303,28 @@ void start_pthread(void* arg) {
      and jump to it. */
   asm volatile("movl %0, %%esp; jmp intr_exit" : : "g"(&if_) : "memory");
   NOT_REACHED();
+}
+
+/* Create a minimal stack by mapping a zeroed page to the first 
+empty page in user virtual memory. */
+static bool setup_thread_stack(void** esp) {
+  struct thread* t = thread_current();
+  *esp = PHYS_BASE - PGSIZE;
+  while (pagedir_get_page(t->pcb->pagedir, *esp) != NULL) {
+    *esp -= PGSIZE;
+  }
+
+  uint8_t* kpage;
+  bool success = false;
+
+  kpage = palloc_get_page(PAL_USER | PAL_ZERO);
+  if (kpage != NULL) {
+    success = pagedir_set_page(t->pcb->pagedir, ((uint8_t*)*esp), kpage, true);
+    if (!success) {
+      palloc_free_page(kpage);
+    }
+  }
+  return success;
 }
 
 /* Puts the current thread to sleep.  It will not be scheduled
