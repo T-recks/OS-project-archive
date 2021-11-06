@@ -18,6 +18,10 @@ static void syscall_handler(struct intr_frame*);
 static bool handle_close(const int fd);
 void close_all_files(void);
 void clear_cmdline(void);
+void release_all_locks(void);
+void up_all_semaphores(void);
+void free_all_locks(void);
+void free_all_semaphores(void);
 
 struct lock filesys_lock;
 
@@ -27,13 +31,15 @@ void syscall_init(void) {
 }
 
 void close_all_files(void) {
-  struct list* fd_table = thread_current()->pcb->open_files;
+  struct process* pcb = thread_current()->pcb;
+  struct list* fd_table = pcb->open_files;
   if (fd_table == NULL) {
     return;
   }
+
   lock_acquire(&filesys_lock);
   while (!list_empty(fd_table)) {
-    struct list_elem *e = list_pop_front(fd_table);
+    struct list_elem* e = list_pop_front(fd_table);
     struct file_data* f = list_entry(e, struct file_data, elem);
     file_close(f->file);
     f->ref_cnt--;
@@ -46,23 +52,81 @@ void close_all_files(void) {
 }
 
 void clear_cmdline(void) {
-  struct list* argv = thread_current()->pcb->argv;
+  struct process* pcb = thread_current()->pcb;
+  struct list* argv = pcb->argv;
   if (argv == NULL)
     return;
+
+  //  lock_acquire(&pcb->lock);
   while (!list_empty(argv)) {
-    struct list_elem *e = list_pop_front(argv);
+    struct list_elem* e = list_pop_front(argv);
     struct word* w = list_entry(e, struct word, elem);
     list_remove(e);
     free(w);
   }
+
+  //  lock_release(&pcb->lock);
 }
 
-static int handle_practice(int val) {
-  return val + 1;
+void free_all_locks(void) {
+  struct process* pcb = thread_current()->pcb;
+  struct list* locks = pcb->locks;
+  if (locks == NULL)
+    return;
+
+  //  lock_acquire(&pcb->lock);
+  while (!list_empty(locks)) {
+    struct list_elem* e = list_pop_front(locks);
+    struct user_lock* w = list_entry(e, struct user_lock, elem);
+    list_remove(e);
+    free(w->lock_kernel);
+    free(w);
+  }
+
+  //  lock_release(&pcb->lock);
 }
+
+void free_all_semaphores(void) {
+  struct process* pcb = thread_current()->pcb;
+  struct list* semas = pcb->semaphores;
+  if (semas == NULL)
+    return;
+
+  //  lock_acquire(&pcb->lock);
+  while (!list_empty(semas)) {
+    struct list_elem* e = list_pop_front(semas);
+    struct user_sema* w = list_entry(e, struct user_sema, elem);
+    list_remove(e);
+    free(w->sema_kernel);
+    free(w);
+  }
+
+  //  lock_release(&pcb->lock);
+}
+
+void release_all_locks(void) {
+  struct process* pcb = thread_current()->pcb;
+  struct list* locks = pcb->locks;
+  if (locks == NULL)
+    return;
+
+  //  lock_acquire(&pcb->lock);
+  struct list_elem* e;
+  for (e = list_begin(locks); e != list_end(locks); e = list_next(e)) {
+    struct user_lock* ul = list_entry(e, struct user_lock, elem);
+    struct thread* holder = ul->lock_kernel->holder;
+    if (holder != NULL && holder->tid == thread_current()->tid) {
+      lock_release(ul->lock_kernel);
+    }
+  }
+
+  //  lock_release(&pcb->lock);
+}
+
+static int handle_practice(int val) { return val + 1; }
 
 void handle_exit(int status) {
-  struct process *pcb = thread_current()->pcb;
+  struct process* pcb = thread_current()->pcb;
   printf("%s: exit(%d)\n", pcb->process_name, status);
   if (pcb->ws == NULL) {
     goto done;
@@ -83,9 +147,9 @@ void handle_exit(int status) {
     goto done;
   }
   // Decrement the ref count of each of the child waiters
-  struct list_elem *e;
-  struct wait_status *w;
-  for (e = list_begin(pcb->waits); e!= list_end(pcb->waits); e = list_next(e)) {
+  struct list_elem* e;
+  struct wait_status* w;
+  for (e = list_begin(pcb->waits); e != list_end(pcb->waits); e = list_next(e)) {
     w = list_entry(e, struct wait_status, elem);
     lock_acquire(&w->lock);
     w->ref_cnt -= 1;
@@ -96,21 +160,26 @@ void handle_exit(int status) {
     }
   }
 done:
+  lock_acquire(&pcb->lock);
   close_all_files();
   clear_cmdline();
+  //  release_all_locks();
+  free_all_locks();
+  free_all_semaphores();
+  lock_release(&pcb->lock);
   process_exit();
 }
 
-static int handle_exec(const char *cmd_line) {
-  
+static int handle_exec(const char* cmd_line) {
+
   // Initialize the share wait status struct
-  struct wait_status *ws = (struct wait_status*)malloc(sizeof(struct wait_status));
+  struct wait_status* ws = (struct wait_status*)malloc(sizeof(struct wait_status));
   sema_init(&ws->sema_load, 0);
   sema_init(&ws->sema_wait, 0);
   lock_init(&ws->lock);
   ws->loaded = false;
   ws->ref_cnt = 2;
-  
+
   pid_t pid = process_execute(cmd_line, ws);
   // Wait for the child process to finish loading
   sema_down(&ws->sema_load); // Child calls sema_up in start_process
@@ -119,12 +188,12 @@ static int handle_exec(const char *cmd_line) {
     return -1;
   } else {
     // Add the child to the list of active children
-    struct list_elem *e = (struct list_elem*)malloc(sizeof(struct list_elem));
+    struct list_elem* e = (struct list_elem*)malloc(sizeof(struct list_elem));
     ws->elem = *e;
     ws->loaded = true;
     ws->pid = pid;
     list_push_back(thread_current()->pcb->waits, &ws->elem);
-    
+
     return pid;
   }
 }
@@ -184,7 +253,7 @@ static int handle_filesize(int fd) {
   struct list* fd_table = thread_current()->pcb->open_files;
   lock_acquire(&filesys_lock);
   // check the fd table for the given fd, return false if not present
-  struct file_data *f = find_file(fd, fd_table);
+  struct file_data* f = find_file(fd, fd_table);
   if (f != NULL) {
     int length = file_length(f->file);
     lock_release(&filesys_lock);
@@ -198,7 +267,7 @@ static int handle_read(int fd, void* buffer, unsigned size) {
   struct list* fd_table = thread_current()->pcb->open_files;
   lock_acquire(&filesys_lock);
   // check the fd table for the given fd, return false if not present
-  struct file_data *f = find_file(fd, fd_table);
+  struct file_data* f = find_file(fd, fd_table);
   if (f != NULL) {
     int result = file_read(f->file, buffer, size);
     lock_release(&filesys_lock);
@@ -238,7 +307,7 @@ static int handle_write(uint32_t* args) {
     return size;
   } else {
     struct list* fd_table = thread_current()->pcb->open_files;
-    struct file_data *f = find_file(fd, fd_table);
+    struct file_data* f = find_file(fd, fd_table);
     if (f != NULL) {
       int result = file_write(f->file, buf, size);
       lock_release(&filesys_lock);
@@ -252,7 +321,7 @@ static int handle_write(uint32_t* args) {
 static void handle_seek(int fd, unsigned position) {
   lock_acquire(&filesys_lock);
   struct list* fd_table = thread_current()->pcb->open_files;
-  struct file_data *f = find_file(fd, fd_table);
+  struct file_data* f = find_file(fd, fd_table);
   if (f != NULL) {
     file_seek(f->file, position);
   }
@@ -262,7 +331,7 @@ static void handle_seek(int fd, unsigned position) {
 static unsigned handle_tell(int fd) {
   lock_acquire(&filesys_lock);
   struct list* fd_table = thread_current()->pcb->open_files;
-  struct file_data *f = find_file(fd, fd_table);
+  struct file_data* f = find_file(fd, fd_table);
   if (f != NULL) {
     int position = file_tell(f->file);
     lock_release(&filesys_lock);
@@ -272,9 +341,141 @@ static unsigned handle_tell(int fd) {
   return -1;
 }
 
-static int handle_compute_e(int n) {
-  return sys_sum_to_e(n);
+static int handle_compute_e(int n) { return sys_sum_to_e(n); }
+
+static bool handle_lock_init(char lock) {
+  // TODO: use process lock to lock these functions
+  if (lock == NULL) {
+    return false;
+  }
+
+  struct list* locks = thread_current()->pcb->locks;
+
+  struct user_lock* lock_u = malloc(sizeof(struct user_lock));
+  if (lock_u == NULL) {
+    handle_exit(-1);
+  }
+
+  struct lock* lock_k = malloc(sizeof(struct lock));
+  lock_init(lock_k);
+  lock_u->lock_user = lock;
+  lock_u->lock_kernel = lock_k;
+  list_push_back(locks, &lock_u->elem);
+  return true;
 }
+
+static bool handle_lock_acquire(char lock) {
+  struct process* pcb = thread_current()->pcb;
+  struct list* locks = pcb->locks;
+  struct list_elem* e;
+
+  lock_acquire(&pcb->lock);
+  for (e = list_begin(locks); e != list_end(locks); e = list_next(e)) {
+    struct user_lock* lock_u = list_entry(e, struct user_lock, elem);
+
+    // Get the kernel lock mapped by the user lock
+    if (lock_u->lock_user == lock) {
+      struct thread* holder = lock_u->lock_kernel->holder;
+      if (holder == NULL || holder->tid != thread_current()->tid) {
+        lock_acquire(lock_u->lock_kernel);
+        lock_release(&pcb->lock);
+        return true;
+      } else {
+        // Process already holds this lock
+        lock_release(&pcb->lock);
+        return false;
+      }
+    }
+  }
+
+  // User lock not initialized by this process
+  lock_release(&pcb->lock);
+  return false;
+}
+
+static bool handle_lock_release(char lock) {
+  struct process* pcb = thread_current()->pcb;
+  struct list* locks = pcb->locks;
+  struct list_elem* e;
+
+  lock_acquire(&pcb->lock);
+  for (e = list_begin(locks); e != list_end(locks); e = list_next(e)) {
+    struct user_lock* lock_u = list_entry(e, struct user_lock, elem);
+
+    // Get the kernel lock mapped by the user lock
+    if (lock_u->lock_user == lock) {
+      struct thread* holder = lock_u->lock_kernel->holder;
+      if (holder != NULL && holder->tid == thread_current()->tid) {
+        lock_release(lock_u->lock_kernel);
+        lock_release(&pcb->lock);
+        return true;
+      } else {
+        // Process does not hold this lock
+        lock_release(&pcb->lock);
+        return false;
+      }
+    }
+  }
+
+  // User lock not initialized by this process
+  lock_release(&pcb->lock);
+  return false;
+}
+
+static bool handle_sema_init(char sema, int val) {
+  if (sema == NULL || val < 0) {
+    return false;
+  }
+
+  struct list* semaphores = thread_current()->pcb->semaphores;
+  struct user_sema* sema_u = malloc(sizeof(struct user_sema));
+  if (sema_u == NULL) {
+    handle_exit(-1);
+  }
+
+  struct semaphore* sema_k = malloc(sizeof(struct semaphore));
+  sema_init(sema_k, val);
+  sema_u->sema_user = sema;
+  sema_u->sema_kernel = sema_k;
+  list_push_back(semaphores, &sema_u->elem);
+  return true;
+}
+
+static bool handle_sema_change(char sema, bool up) {
+  struct process* pcb = thread_current()->pcb;
+  struct list* semaphores = pcb->semaphores;
+  struct list_elem* e;
+
+  lock_acquire(&pcb->lock);
+  for (e = list_begin(semaphores); e != list_end(semaphores); e = list_next(e)) {
+    struct user_sema* sema_u = list_entry(e, struct user_sema, elem);
+
+    // Get the semaphore lock mapped by the user lock
+    if (sema_u->sema_user == sema) {
+      if (up) {
+        sema_up(sema_u->sema_kernel);
+        lock_release(&pcb->lock);
+        return true;
+      } else {
+        sema_down(sema_u->sema_kernel);
+        lock_release(&pcb->lock);
+        return true;
+      }
+    }
+  }
+
+  // User semaphore not initialized by this process
+  lock_release(&pcb->lock);
+  return false;
+}
+
+static tid_t handle_sys_pthread_create(stub_fun sfun, pthread_fun tfun, const void* arg) {
+  return pthread_execute(sfun, tfun, arg);
+}
+
+static void handle_sys_pthread_exit(void) {}
+
+static tid_t handle_sys_pthread_join(tid_t tid) {}
 
 /* Validate ARGS by ensuring each address points to valid memory.
  * Valid pointers are not null, reference below PHYS_BASE/are not
@@ -282,9 +483,10 @@ static int handle_compute_e(int n) {
 */
 static void validate_args(struct intr_frame* f, uint32_t* args, int n) {
   int i = 1;
-  
+
   int vldt_i = -1;
-  if (args[0] == SYS_EXEC || args[0] == SYS_OPEN || args[0] == SYS_CREATE || args[0] == SYS_REMOVE) {
+  if (args[0] == SYS_EXEC || args[0] == SYS_OPEN || args[0] == SYS_CREATE ||
+      args[0] == SYS_REMOVE) {
     vldt_i = 1;
   }
   if (args[0] == SYS_READ || args[0] == SYS_WRITE) {
@@ -292,35 +494,40 @@ static void validate_args(struct intr_frame* f, uint32_t* args, int n) {
   }
   if (vldt_i != -1) {
     // Argument is a pointer, make sure it's valid
-    if (is_kernel_vaddr((void*)(&args[vldt_i]+1)) || pagedir_get_page(active_pd(), (void*)&args[vldt_i]+1) == NULL || args[vldt_i] == (int)NULL) {
+    if (is_kernel_vaddr((void*)(&args[vldt_i] + 1)) ||
+        pagedir_get_page(active_pd(), (void*)&args[vldt_i] + 1) == NULL ||
+        args[vldt_i] == (int)NULL) {
       f->eax = -1;
       handle_exit(-1);
     }
-    if (is_kernel_vaddr((void*)(args[vldt_i]+1)) || pagedir_get_page(active_pd(), (void*)args[vldt_i]+1) == NULL || args[vldt_i] == (int)NULL) {
+    if (is_kernel_vaddr((void*)(args[vldt_i] + 1)) ||
+        pagedir_get_page(active_pd(), (void*)args[vldt_i] + 1) == NULL ||
+        args[vldt_i] == (int)NULL) {
       f->eax = -1;
       handle_exit(-1);
     }
   }
-  
-  for (; i != n+1; i++) {
-    if ((void*)args[i] == NULL && (args[0] != SYS_EXIT && args[0] != SYS_READ && args[0] != SYS_WRITE &&
-                                   args[0] != SYS_SEEK && args[0] != SYS_TELL && args[0] != SYS_CREATE)) {
+
+  for (; i != n + 1; i++) {
+    if ((void*)args[i] == NULL &&
+        (args[0] != SYS_EXIT && args[0] != SYS_READ && args[0] != SYS_WRITE &&
+         args[0] != SYS_SEEK && args[0] != SYS_TELL && args[0] != SYS_CREATE)) {
       // exit(0) is a successfull exit, reading/writing 0 bytes is valid
       break;
     }
     // For checking if the pointer is to invalid memory, add 1 byte to the
     // address to account for the case some bytes of the address are
     // valid but the others are not (address lies on a page boundary).
-    if (is_kernel_vaddr((void*)(&args[i]+1))) {
+    if (is_kernel_vaddr((void*)(&args[i] + 1))) {
       // Referencing kernel memory.
       break;
     }
-    if (pagedir_get_page(active_pd(), (void*)(&args[i]+1)) == NULL) {
+    if (pagedir_get_page(active_pd(), (void*)(&args[i] + 1)) == NULL) {
       // Referencing memory not in the page directory
       break;
     }
   }
-  if (i != n+1) {
+  if (i != n + 1) {
     // Invalid memory access, terminate the process
     f->eax = -1;
     handle_exit(-1);
@@ -337,10 +544,11 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
    * include it in your final submission.
    */
 
-//  printf("System call number: %d\n", args[0]);
-  
+  //  printf("System call number: %d\n", args[0]);
+
   // Case where the stack is too large and all bytes of the esp are in invalid memory
-  if (f->ebp - (uint32_t)f->esp > 4096 && pagedir_get_page(active_pd(), (void*)(f->esp+1)) == NULL) {
+  if (f->ebp - (uint32_t)f->esp > 4096 &&
+      pagedir_get_page(active_pd(), (void*)(f->esp + 1)) == NULL) {
     handle_exit(-1);
   }
 
@@ -402,8 +610,39 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       handle_close((int)args[1]);
       break;
     case SYS_COMPUTE_E:
-      //TODO: Validate
       f->eax = handle_compute_e(args[1]);
+      break;
+    case SYS_PT_CREATE:
+      f->eax = handle_sys_pthread_create((stub_fun)args[1], (pthread_fun)args[2], (void*)args[3]);
+      break;
+    case SYS_PT_EXIT:
+      handle_sys_pthread_exit();
+      break;
+    case SYS_PT_JOIN:
+      f->eax = handle_sys_pthread_join((tid_t)args[1]);
+      break;
+    case SYS_LOCK_INIT:
+      f->eax = handle_lock_init((char)args[1]);
+      break;
+    case SYS_LOCK_ACQUIRE:
+      //      validate_args(f, args, 1);
+      f->eax = handle_lock_acquire((char)args[1]);
+      break;
+    case SYS_LOCK_RELEASE:
+      //      validate_args(f, args, 1);
+      f->eax = handle_lock_release((char)args[1]);
+      break;
+    case SYS_SEMA_INIT:
+      //      validate_args(f, args, 2);
+      f->eax = handle_sema_init((char)args[1], (int)args[2]);
+      break;
+    case SYS_SEMA_DOWN:
+      //      validate_args(f, args, 1);
+      f->eax = handle_sema_change((char)args[1], false);
+      break;
+    case SYS_SEMA_UP:
+      //      validate_args(f, args, 1);
+      f->eax = handle_sema_change((char)args[1], true);
       break;
   }
 }

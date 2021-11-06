@@ -297,7 +297,7 @@ void start_pthread(void* arg) {
 
   // copy arg to stack
   if_.esp -= sizeof(&info->arg);
-  memcpy(if_.esp, &if_.esp, sizeof(&if_.esp));
+  memcpy(if_.esp, info->arg, sizeof(info->arg));
   // copy pthread_fun to stack
   if_.esp -= sizeof(info->tf);
   memcpy(if_.esp, info->tf, sizeof(info->tf));
@@ -329,7 +329,6 @@ static bool setup_thread_stack(void** esp) {
 
   uint8_t* kpage;
   bool success = false;
-  
   // 49, 51, 62, 69
   kpage = palloc_get_page(PAL_USER | PAL_ZERO);
   if (kpage != NULL) {

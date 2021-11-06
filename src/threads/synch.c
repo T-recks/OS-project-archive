@@ -103,22 +103,25 @@ void sema_up(struct semaphore* sema) {
   ASSERT(sema != NULL);
 
   old_level = intr_disable();
-  
-  // Schedule the waiting thread with the highest priority
+
+  // Wake up the waiting thread with the highest priority
   if (!list_empty(&sema->waiters)) {
     struct list_elem* e = list_max(&sema->waiters, less_list_sema_waiter, less_prio);
-    struct thread* thread_to_sched = list_entry(e, struct thread, sema_elem);
-    list_remove(&thread_to_sched->sema_elem);
-    thread_to_sched->blocked_on = NULL;
-    thread_to_sched->donating_to = NULL;
-    thread_unblock(thread_to_sched);
-    
+    struct thread* thread_to_acquire = list_entry(e, struct thread, sema_elem);
+    list_remove(&thread_to_acquire->sema_elem);
+    thread_to_acquire->blocked_on = NULL;
+    thread_to_acquire->donating_to = NULL;
+    thread_unblock(thread_to_acquire);
+
     // Yield to the scheduler if this is no longer the highest priority thread
-    if (thread_current()->priority < thread_to_sched->priority) {
+    //    struct thread* thread_highest = thread_max_prio_get();
+
+    if (thread_current()->priority < thread_to_acquire->priority) {
       if (intr_context()) {
         intr_yield_on_return();
       } else {
         sema->value++;
+        intr_set_level(old_level);
         thread_yield();
         return;
       }
@@ -179,12 +182,6 @@ void lock_init(struct lock* lock) {
 
   lock->holder = NULL;
   sema_init(&lock->semaphore, 1);
-  lock->most_recent = NULL;
-}
-
-void lock_init_named(struct lock* lock, const char* name) {
-    strlcpy(lock->name, name, sizeof lock->name);
-    lock_init(lock);
 }
 
 /* Acquires LOCK, sleeping until it becomes available if
@@ -208,10 +205,8 @@ void lock_acquire(struct lock* lock) {
   if (lock->holder != NULL) {
     // Lock is busy, donate priority if necessary
     t->blocked_on = lock;
-    donate_priority(t, lock->most_recent, lock);
+    donate_priority(t, lock->holder, lock);
   }
-  // Set the head of the donation chain
-  lock->most_recent = t;
 
   // If the lock was busy, this will block the thread
   sema_down(&lock->semaphore);
@@ -220,7 +215,6 @@ void lock_acquire(struct lock* lock) {
   // TODO: Update the donors?
 
   intr_set_level(old_level);
-  
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
@@ -249,7 +243,7 @@ bool lock_try_acquire(struct lock* lock) {
 void lock_release(struct lock* lock) {
   ASSERT(lock != NULL);
   ASSERT(lock_held_by_current_thread(lock));
-  
+
   // Need to disable interrupts in order to operate atomically
   enum intr_level old_level;
   old_level = intr_disable();
@@ -261,7 +255,7 @@ void lock_release(struct lock* lock) {
     struct list_elem* e = list_front(&t->priorities);
     while (e != list_end(&t->priorities)) {
       struct inherited_priority* donation = list_entry(e, struct inherited_priority, elem);
-      struct list_elem *temp = e;
+      struct list_elem* temp = e;
       e = list_next(temp);
       if (donation->from_lock == lock) {
         list_remove(temp);
@@ -270,13 +264,13 @@ void lock_release(struct lock* lock) {
     }
 
     // Set the priority to the max of donated priorities (if necessary)
-    e = list_max(&t->priorities, less_list_thread, less_prio_inherited);
+    e = list_max(&t->priorities, less_list_ip, less_prio_inherited);
     t->priority = list_entry(e, struct inherited_priority, elem)->priority;
   }
 
   lock->holder = NULL;
   sema_up(&lock->semaphore);
-  
+
   intr_set_level(old_level);
 }
 
@@ -354,9 +348,11 @@ struct semaphore_elem {
   int priority;               /* Priority of the waiting thread */
 };
 
-static bool less_list_cond_waiter(const struct list_elem* e1, const struct list_elem* e2, void* aux) {
+static bool less_list_cond_waiter(const struct list_elem* e1, const struct list_elem* e2,
+                                  void* aux) {
   bool (*f)(struct semaphore_elem*, struct semaphore_elem*) = aux;
-  return f(list_entry(e1, struct semaphore_elem, elem), list_entry(e2, struct semaphore_elem, elem));
+  return f(list_entry(e1, struct semaphore_elem, elem),
+           list_entry(e2, struct semaphore_elem, elem));
 }
 
 static bool cond_less_prio(const struct semaphore_elem* s1, const struct semaphore_elem* s2) {

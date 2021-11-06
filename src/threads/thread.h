@@ -91,14 +91,16 @@ struct thread {
   int expiration_time;       /* When this thread should be woken up */
   struct list_elem allelem;  /* List element for all threads list. */
 
-  struct thread* donating_to; // pointer to thread that this thread is donating its priority to. NULL if not donating
+  struct thread*
+      donating_to; // pointer to thread that this thread is donating its priority to. NULL if not donating
   struct lock* blocked_on; // pointer to lock this thread is blocking on. NULL if not blocked
-  struct list priorities; // list of priority values in order of when they were donated to the thread (includes original priority)
+  struct list
+      priorities; // list of priority values in order of when they were donated to the thread (includes original priority)
 
   /* Shared between thread.c and synch.c. */
   struct list_elem elem; /* List element. */
 
-  int tickets;           //Tickets for lottery scheduler
+  int tickets;                //Tickets for lottery scheduler
   struct list_elem proc_elem; /* List element for threads spawned by this process list */
   struct list_elem sema_elem; /* List element for threads waiting for a lock */
 
