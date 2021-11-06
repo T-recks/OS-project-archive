@@ -103,7 +103,7 @@ void sema_up(struct semaphore* sema) {
   ASSERT(sema != NULL);
 
   old_level = intr_disable();
-  
+
   // Wake up the waiting thread with the highest priority
   if (!list_empty(&sema->waiters)) {
     struct list_elem* e = list_max(&sema->waiters, less_list_sema_waiter, less_prio);
@@ -112,10 +112,10 @@ void sema_up(struct semaphore* sema) {
     thread_to_acquire->blocked_on = NULL;
     thread_to_acquire->donating_to = NULL;
     thread_unblock(thread_to_acquire);
-    
+
     // Yield to the scheduler if this is no longer the highest priority thread
-//    struct thread* thread_highest = thread_max_prio_get();
-    
+    //    struct thread* thread_highest = thread_max_prio_get();
+
     if (thread_current()->priority < thread_to_acquire->priority) {
       if (intr_context()) {
         intr_yield_on_return();
@@ -215,7 +215,6 @@ void lock_acquire(struct lock* lock) {
   // TODO: Update the donors?
 
   intr_set_level(old_level);
-  
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
@@ -244,7 +243,7 @@ bool lock_try_acquire(struct lock* lock) {
 void lock_release(struct lock* lock) {
   ASSERT(lock != NULL);
   ASSERT(lock_held_by_current_thread(lock));
-  
+
   // Need to disable interrupts in order to operate atomically
   enum intr_level old_level;
   old_level = intr_disable();
@@ -256,7 +255,7 @@ void lock_release(struct lock* lock) {
     struct list_elem* e = list_front(&t->priorities);
     while (e != list_end(&t->priorities)) {
       struct inherited_priority* donation = list_entry(e, struct inherited_priority, elem);
-      struct list_elem *temp = e;
+      struct list_elem* temp = e;
       e = list_next(temp);
       if (donation->from_lock == lock) {
         list_remove(temp);
@@ -271,7 +270,7 @@ void lock_release(struct lock* lock) {
 
   lock->holder = NULL;
   sema_up(&lock->semaphore);
-  
+
   intr_set_level(old_level);
 }
 
@@ -349,9 +348,11 @@ struct semaphore_elem {
   int priority;               /* Priority of the waiting thread */
 };
 
-static bool less_list_cond_waiter(const struct list_elem* e1, const struct list_elem* e2, void* aux) {
+static bool less_list_cond_waiter(const struct list_elem* e1, const struct list_elem* e2,
+                                  void* aux) {
   bool (*f)(struct semaphore_elem*, struct semaphore_elem*) = aux;
-  return f(list_entry(e1, struct semaphore_elem, elem), list_entry(e2, struct semaphore_elem, elem));
+  return f(list_entry(e1, struct semaphore_elem, elem),
+           list_entry(e2, struct semaphore_elem, elem));
 }
 
 static bool cond_less_prio(const struct semaphore_elem* s1, const struct semaphore_elem* s2) {

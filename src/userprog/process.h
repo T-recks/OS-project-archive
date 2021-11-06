@@ -29,44 +29,44 @@ struct process {
   struct thread* main_thread; /* Pointer to main thread */
   struct lock lock;           /* Kernel lock shared among all of this process' threads */
   struct list* argv;
-  struct wait_status *ws;     /* Wait status struct of the parent */
-  struct list* waits;         /* List of children this process' children */
-  struct list* open_files;    /* All files opened by this process */
-  struct list* locks;         /* All locks initialized by this process */
-  struct list* semaphores;    /* All semaphores initialized by this process */
-  struct list* threads;       /* All theads spawned by this process */
+  struct wait_status* ws;  /* Wait status struct of the parent */
+  struct list* waits;      /* List of children this process' children */
+  struct list* open_files; /* All files opened by this process */
+  struct list* locks;      /* All locks initialized by this process */
+  struct list* semaphores; /* All semaphores initialized by this process */
+  struct list* threads;    /* All theads spawned by this process */
 };
 
 /*
 Structure the file descriptors into a list. */
 struct file_data {
-  struct file* file;          /* File pointer */
+  struct file* file; /* File pointer */
   char* filename;
-  int fd;                     /* File descriptor of this file */
-  int ref_cnt;                /* How many processes have this file open */
-  struct list_elem elem;      /* List element for all files list */
+  int fd;                /* File descriptor of this file */
+  int ref_cnt;           /* How many processes have this file open */
+  struct list_elem elem; /* List element for all files list */
 };
 
 /* Shared between a parent and a child, one for each newly created child
  * Need 2 semaphores because wait() waits for the process to exit, while
  * exec() waits for the process to load. */
 struct wait_status {
-  struct semaphore sema_wait;   /* Semaphore to indicate the process has exited */
-  struct semaphore sema_load;   /* Semaphore to indicate the process has loaded */
-  struct lock lock;             /* Lock to avoid race conditions with ref_cnt */
-  int ref_cnt;                  /* Number of active processes; initialize to 2 */
-  int exit_code;                /* Exit code of child, if applicable */
-  int pid;                      /* pid of the child */
-  bool loaded;                  /* Child should set this to true after loading*/
+  struct semaphore sema_wait; /* Semaphore to indicate the process has exited */
+  struct semaphore sema_load; /* Semaphore to indicate the process has loaded */
+  struct lock lock;           /* Lock to avoid race conditions with ref_cnt */
+  int ref_cnt;                /* Number of active processes; initialize to 2 */
+  int exit_code;              /* Exit code of child, if applicable */
+  int pid;                    /* pid of the child */
+  bool loaded;                /* Child should set this to true after loading*/
   struct list_elem elem;
 };
 
 /*
 Structure the words extracted from the user command into a list. */
 typedef struct word {
-    char* val;
-    int len;
-    struct list_elem elem;
+  char* val;
+  int len;
+  struct list_elem elem;
 } word_t;
 
 struct user_lock {
@@ -76,7 +76,7 @@ struct user_lock {
 };
 
 struct user_sema {
-  char sema_user;           /* User-level semaphore */
+  char sema_user;                /* User-level semaphore */
   struct semaphore* sema_kernel; /* Mapped kernel-level semaphore */
   struct list_elem elem;
 };

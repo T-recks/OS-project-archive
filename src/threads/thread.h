@@ -104,7 +104,6 @@ struct thread {
   struct list_elem proc_elem; /* List element for threads spawned by this process list */
   struct list_elem sema_elem; /* List element for threads waiting for a lock */
 
-
 #ifdef USERPROG
   /* Owned by process.c. */
   struct process* pcb; /* Process control block if this thread is a userprog */

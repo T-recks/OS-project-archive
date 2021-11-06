@@ -318,7 +318,7 @@ void start_pthread(void* arg) {
   NOT_REACHED();
 }
 
-/* Create a minimal stack by mapping a zeroed page to the first 
+/* Create a minimal stack by mapping a zeroed page to the first
 empty page in user virtual memory. */
 static bool setup_thread_stack(void** esp) {
   struct thread* t = thread_current();
