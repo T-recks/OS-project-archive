@@ -473,7 +473,10 @@ static bool handle_sema_change(char sema, bool up) {
   return false;
 }
 
-static tid_t handle_sys_pthread_create(stub_fun sfun, pthread_fun tfun, const void* arg) {
+static tid_t handle_sys_pthread_create(stub_fun sfun, pthread_fun tfun, const void* arg, struct intr_frame* f) {
+  f->eip = sfun;
+  // Create the thread and push args onto stack
+  f->esp =
 }
 
 static void handle_sys_pthread_exit(void) {

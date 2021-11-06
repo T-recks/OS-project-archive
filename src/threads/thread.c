@@ -200,6 +200,7 @@ tid_t thread_create(const char* name, int priority, thread_func* function, void*
   tid_t tid;
 
   ASSERT(function != NULL);
+
   /* Allocate thread. */
   t = palloc_get_page(PAL_ZERO);
   if (t == NULL)
@@ -237,6 +238,63 @@ tid_t thread_create(const char* name, int priority, thread_func* function, void*
   }
 
   return tid;
+}
+
+tid_t pthread_create(void (**eip)(void), void** esp, stub_fun sfun, pthread_fun tfun, const void* arg) {
+  // 1. Allocate space for the thread's stack
+  int page_loc = PHYS_BASE - PGSIZE;
+  struct thread* t = thread_current()->pcb->main_thread;
+  void *upage = pagedir_get_page(t->pagedir, page_loc);
+  
+  // Find an unmapped page in memory
+  while (upage != NULL) {
+    page_loc -= PGSIZE;
+    upage = pagedir_get_page(t->pagedir, page_loc);
+  }
+  
+  /* Get a page of memory. */
+  uint8_t* kpage = palloc_get_page(PAL_USER);
+  if (kpage == NULL)
+    return false;
+  
+  // 49, 51, 62, 69
+  if (!install_page(upage, kpage, writable)) {
+    palloc_free_page(kpage);
+    return false;
+  }
+  
+  *esp -= upage;
+  
+  // 2. Set up the stack for the thread
+  // memcpy arg and tfun to the stack and a dummy return address
+  void* nullptr = NULL;
+  *esp = *esp - 4;
+  memcpy(*esp, &arg, sizeof(stub_fun));
+  *esp = *esp - 4;
+  memcpy(*esp, &tfun, sizeof(pthread_fun));
+  *esp = *esp - 4;
+  memcpy(*esp, &nullptr, sizeof(void*));
+  *eip = sfun
+  
+  // set tid to be the length of the list of spawned threads by the process
+}
+
+tid_t pthread_execute(struct pthread_exec_info info, struct join_status js) {
+  // sys_pthread_create->pthread_execute->thread_create->pthread_start_process
+  
+  tid_t tid = thread_create("name", PRI_DEFAULT, start_pthread, (void*)info);
+  
+  if (tid == TID_ERROR) {
+    js->ref_cnt -= 1;
+    sema_up(&js->sema_load);
+    sema_up(&js->sema_wait);
+  }
+  
+  return tid;
+}
+
+void start_pthread(void* what) {
+
 }
 
 /* Puts the current thread to sleep.  It will not be scheduled

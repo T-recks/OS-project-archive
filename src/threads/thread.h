@@ -118,6 +118,18 @@ struct inherited_priority {
   struct list_elem elem;  // able to put in list
 };
 
+/* Shared between the main thread and a child, one for each newly created thread. */
+struct join_status {
+  struct semaphore sema_wait;   /* Semaphore to indicate the process has exited */
+  struct semaphore sema_load;   /* Semaphore to indicate the process has loaded */
+  struct lock lock;             /* Lock to avoid race conditions with ref_cnt */
+  int ref_cnt;                  /* Number of active processes; initialize to 2 */
+  int exit_code;                /* Exit code of child, if applicable */
+  int pid;                      /* pid of the child */
+  bool loaded;                  /* Child should set this to true after loading*/
+  struct list_elem elem;
+};
+
 /* Types of scheduler that the user can request the kernel
  * use to schedule threads at runtime. */
 enum sched_policy {
