@@ -97,9 +97,11 @@ struct thread {
 
   /* Shared between thread.c and synch.c. */
   struct list_elem elem; /* List element. */
-  
+
+  int tickets;           //Tickets for lottery scheduler
   struct list_elem proc_elem; /* List element for threads spawned by this process list */
   struct list_elem sema_elem; /* List element for threads waiting for a lock */
+
 
 #ifdef USERPROG
   /* Owned by process.c. */
@@ -114,6 +116,18 @@ struct inherited_priority {
   int priority;           // priority value
   struct lock* from_lock; // the lock from which this thread inherited
   struct list_elem elem;  // able to put in list
+};
+
+/* Shared between the main thread and a child, one for each newly created thread. */
+struct join_status {
+  struct semaphore sema_wait;   /* Semaphore to indicate the process has exited */
+  struct semaphore sema_load;   /* Semaphore to indicate the process has loaded */
+  struct lock lock;             /* Lock to avoid race conditions with ref_cnt */
+  int ref_cnt;                  /* Number of active processes; initialize to 2 */
+  int exit_code;                /* Exit code of child, if applicable */
+  int pid;                      /* pid of the child */
+  bool loaded;                  /* Child should set this to true after loading*/
+  struct list_elem elem;
 };
 
 /* Types of scheduler that the user can request the kernel
@@ -139,7 +153,10 @@ void thread_tick(void);
 void thread_print_stats(void);
 
 typedef void thread_func(void* aux);
+typedef void (*pthread_fun)(void*);
+typedef void (*stub_fun)(pthread_fun, void*);
 tid_t thread_create(const char* name, int priority, thread_func*, void*);
+tid_t pthread_execute(stub_fun sfun, pthread_fun tfun, void* arg);
 
 void thread_block(void);
 void thread_unblock(struct thread*);
@@ -167,7 +184,9 @@ void donate_priority(struct thread* from, struct thread* to, struct lock* lock);
 
 bool less_list_thread(const struct list_elem* e1, const struct list_elem* e2, void* aux);
 bool less_list_sema_waiter(const struct list_elem* e1, const struct list_elem* e2, void* aux);
+bool less_list_ip(const struct list_elem* e1, const struct list_elem* e2, void* aux);
 bool less_prio(const struct thread* t1, const struct thread* t2);
 bool less_prio_inherited(const struct inherited_priority* t1, const struct inherited_priority* t2);
+struct thread* thread_max_prio_get(void);
 
 #endif /* threads/thread.h */
