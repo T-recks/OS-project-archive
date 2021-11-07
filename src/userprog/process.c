@@ -365,6 +365,15 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
   cond_init(&t->pcb->cond);
   t->pcb->exiting = false;
   
+  // Set the join status for the main thread
+  struct join_status *js = malloc(sizeof(struct join_status));
+  sema_init(&js->sema, 0);
+  lock_init(&js->lock);
+  js->joined = false;
+  js->tid = t->tid;
+  js->status = t->status;
+  t->js = js;
+  
   // add each arg to the argv list & increment argc
   char *token, *save_ptr;
   int argc = 0;

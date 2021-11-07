@@ -534,7 +534,7 @@ void thread_set_priority(int new_priority) {
   base_prio->priority = new_priority;
 
   // Priority should be the max of the new priority and donated priorities
-  e = list_max(&t->priorities, less_list_thread, less_prio_inherited);
+  e = list_max(&t->priorities, less_list_ip, less_prio_inherited);
   t->priority = list_entry(e, struct inherited_priority, elem)->priority;
 
   // Update the donation chain (if necessary)

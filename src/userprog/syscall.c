@@ -531,6 +531,12 @@ static void handle_sys_pthread_exit_main(void) {
   struct thread *t = thread_current();
   
   lock_acquire(&t->pcb->lock);
+  if (t->js->joined) {
+    lock_release(&t->pcb->lock);
+    return;
+  }
+  
+  t->js->joined = true;
   // Wake any waiters and signal
   sema_up(&t->js->sema);
   cond_signal(&t->pcb->cond, &t->pcb->lock);
@@ -539,9 +545,11 @@ static void handle_sys_pthread_exit_main(void) {
   
   // Join on all unjoined threads
   struct list* threads = t->pcb->threads;
-  struct list_elem *e;
-  for (e = list_begin(threads); e != list_end(threads); e = list_next(e)) {
+  struct list_elem *e = list_begin(threads);
+  while (e != list_end(threads)) {
     struct join_status *js = list_entry(e, struct join_status, elem);
+    struct list_elem *temp = e;
+    e = list_next(temp);
     if (!js->joined) {
       handle_sys_pthread_join(js->tid);
     }
