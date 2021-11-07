@@ -1,0 +1,44 @@
+14c14
+< pass tests/threads/priority-donate-lower
+---
+> FAIL tests/threads/priority-donate-lower
+127,128c127,128
+< FAIL tests/userprog/multithreading/lock-data
+< FAIL tests/userprog/multithreading/lock-ll
+---
+> pass tests/userprog/multithreading/lock-data
+> pass tests/userprog/multithreading/lock-ll
+135,136c135,136
+< FAIL tests/userprog/multithreading/create-simple
+< FAIL tests/userprog/multithreading/create-many
+---
+> pass tests/userprog/multithreading/create-simple
+> pass tests/userprog/multithreading/create-many
+140,142c140,142
+< FAIL tests/userprog/multithreading/exit-simple
+< FAIL tests/userprog/multithreading/join-fail
+< FAIL tests/userprog/multithreading/join-recur
+---
+> pass tests/userprog/multithreading/exit-simple
+> pass tests/userprog/multithreading/join-fail
+> pass tests/userprog/multithreading/join-recur
+146c146
+< FAIL tests/userprog/multithreading/wait-fail
+---
+> pass tests/userprog/multithreading/wait-fail
+148,152c148,152
+< FAIL tests/userprog/multithreading/exec-thread-n
+< pass tests/userprog/multithreading/exit-clean-1
+< pass tests/userprog/multithreading/exit-clean-2
+< pass tests/userprog/multithreading/multi-oom-mt
+< pass tests/userprog/multithreading/pcb-syn
+---
+> pass tests/userprog/multithreading/exec-thread-n
+> FAIL tests/userprog/multithreading/exit-clean-1
+> FAIL tests/userprog/multithreading/exit-clean-2
+> FAIL tests/userprog/multithreading/multi-oom-mt
+> FAIL tests/userprog/multithreading/pcb-syn
+166c166
+< 18 of 164 tests failed.
+---
+> 14 of 164 tests failed.
