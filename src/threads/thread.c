@@ -53,6 +53,7 @@ struct kernel_thread_frame {
 
 struct pthread_exec_info {
   struct process* pcb;
+  struct join_status *js;
   enum thread_status status;
   tid_t tid;
   stub_fun sf;
@@ -278,6 +279,8 @@ tid_t pthread_execute(stub_fun sfun, pthread_fun tfun, void* arg) {
   js->joined = false;
   list_push_back(thread_current()->pcb->threads, &js->elem);
   
+  info->js = js;
+  
   /* Create a new thread to execute. */
   tid = thread_create("REPLACE ME", PRI_DEFAULT, start_pthread, (void*)info);
   sema_down(&info->finished);
@@ -305,6 +308,7 @@ void start_pthread(void* arg) {
   
   info->status = t->status;
   info->tid = t->tid;
+  t->js = info->js;
 
   // initialize the interrupt frame
   memset(&if_, 0, sizeof if_);

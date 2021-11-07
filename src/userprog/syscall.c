@@ -108,7 +108,6 @@ void release_all_locks(void) {
       lock_release(ul->lock_kernel);
     }
   }
-
 }
 
 static int handle_practice(int val) { return val + 1; }
@@ -504,9 +503,11 @@ static tid_t handle_sys_pthread_join(tid_t tid) {
         } else {
           // Block on the thread (release locks to avoid deadlock)
           release_all_locks();
+          lock_release(&t->pcb->lock);
           sema_down(&js->sema);
           
           // Free the join status and remove it from the list
+          lock_acquire(&t->pcb->lock);
           list_remove(e);
           free(js);
           lock_release(&t->pcb->lock);
