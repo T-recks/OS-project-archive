@@ -7,6 +7,7 @@
 #include "userprog/process.h"
 #include "threads/vaddr.h"
 #include "userprog/pagedir.h"
+#include "threads/palloc.h"
 #include "devices/shutdown.h"
 #include "lib/float.h"
 #include "threads/synch.h"
@@ -556,7 +557,10 @@ void handle_sys_pthread_exit(void) {
     handle_sys_pthread_exit_main();
   } else {
     // Deallocate the user stack
-  
+    pagedir_clear_page(t->pcb->pagedir, t->thread_stack);
+    void* page = pagedir_get_page(t->pcb->pagedir, t->thread_stack);
+    palloc_free_page(page);
+    
     lock_acquire(&t->pcb->lock);
     // Wake any waiters and signal
     sema_up(&t->js->sema);
