@@ -86,6 +86,7 @@ struct thread {
   tid_t tid;                 /* Thread identifier. */
   enum thread_status status; /* Thread state. */
   char name[16];             /* Name (for debugging purposes). */
+  uint8_t* thread_stack;     /* Permanent pointer to top of thread stack */
   uint8_t* stack;            /* Saved stack pointer. */
   int priority;              /* Priority. */
   int expiration_time;       /* When this thread should be woken up */
