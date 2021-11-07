@@ -477,32 +477,27 @@ static tid_t handle_sys_pthread_create(stub_fun sfun, pthread_fun tfun, void* ar
   return tid;
 }
 
-static void handle_sys_pthread_exit(void) {}
-
-static tid_t handle_sys_pthread_join_main() {
-  return TID_ERROR;
-}
-
 static tid_t handle_sys_pthread_join(tid_t tid) {
   struct thread *t = thread_current();
   if (t->pcb->main_thread->tid == tid) {
-    return handle_sys_pthread_join_main();
+    sema_down(&t->js->sema);
+    return tid;
   }
   struct list* joins = t->pcb->threads;
   struct list_elem *e;
   lock_acquire(&t->pcb->lock);
   for (e = list_begin(joins); e != list_end(joins); e = list_next(e)) {
     struct join_status *js = list_entry(e, struct join_status, elem);
-    if (js->thread->tid == tid) {
+    if (js->tid == tid) {
       lock_acquire(&js->lock); // Acquire before so only one thread can get into the conditional
       if (!js->joined) {
         // Set to true to avoid waiting on the same thread twice
         js->joined = true;
         lock_release(&js->lock);
-        if (js->thread->status == THREAD_DYING) {
+        if (js->status == THREAD_DYING) {
           // Thread was part of the same process but has already terminated
           lock_release(&t->pcb->lock);
-          return js->thread->tid;
+          return js->tid;
         } else {
           // Block on the thread
           sema_down(&js->sema);
@@ -525,6 +520,42 @@ static tid_t handle_sys_pthread_join(tid_t tid) {
   // INVALID: Thread is not a part of this process
   lock_release(&t->pcb->lock);
   return TID_ERROR;
+}
+
+static void handle_sys_pthread_exit_main(void) {
+  struct thread *t = thread_current();
+  
+  // Wake any waiters
+  sema_up(&t->js->sema);
+  
+  // Join on all unjoined threads
+  struct list* threads = t->pcb->threads;
+  struct list_elem *e;
+  for (e = list_begin(threads); e != list_end(threads); e = list_next(e)) {
+    struct join_status *js = list_entry(e, struct join_status, elem);
+    if (!js->joined) {
+      handle_sys_pthread_join(js->tid);
+    }
+  }
+  
+  // Process exit
+  handle_exit(0);
+}
+
+static void handle_sys_pthread_exit(void) {
+  struct thread *t = thread_current();
+  if (t->pcb->main_thread->tid == t->tid) {
+    // Exiting thread is main thread
+    handle_sys_pthread_exit_main();
+  } else {
+    // Deallocate the user stack
+  
+    // Wake waiters
+    sema_up(&t->js->sema);
+  
+    // Kill the thread
+    thread_exit();
+  }
 }
 
 /* Validate ARGS by ensuring each address points to valid memory.
