@@ -122,13 +122,10 @@ struct inherited_priority {
 
 /* Shared between the main thread and a child, one for each newly created thread. */
 struct join_status {
-  struct semaphore sema_wait;   /* Semaphore to indicate the process has exited */
-  struct semaphore sema_load;   /* Semaphore to indicate the process has loaded */
-  struct lock lock;             /* Lock to avoid race conditions with ref_cnt */
-  int ref_cnt;                  /* Number of active processes; initialize to 2 */
-  int exit_code;                /* Exit code of child, if applicable */
-  int pid;                      /* pid of the child */
-  bool loaded;                  /* Child should set this to true after loading*/
+  struct semaphore join;        /* Semaphore to indicate the process has exited */
+  struct lock lock;             /* Lock to protect the joined boolean */
+  bool joined;                  /* Indicate this thread has been joined on */
+  struct thread *thread;        /* Spawned thread */
   struct list_elem elem;
 };
 

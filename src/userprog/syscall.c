@@ -479,7 +479,53 @@ static tid_t handle_sys_pthread_create(stub_fun sfun, pthread_fun tfun, void* ar
 
 static void handle_sys_pthread_exit(void) {}
 
-static tid_t handle_sys_pthread_join(tid_t tid) {}
+static tid_t handle_sys_pthread_join_main() {
+  return TID_ERROR;
+}
+
+static tid_t handle_sys_pthread_join(tid_t tid) {
+  struct thread *t = thread_current();
+  if (t->pcb->main_thread->tid == tid) {
+    return handle_sys_pthread_join_main();
+  }
+  struct list* joins = t->pcb->threads;
+  struct list_elem *e;
+  lock_acquire(&t->pcb->lock);
+  for (e = list_begin(joins); e != list_end(joins); e = list_next(e)) {
+    struct join_status *js = list_entry(e, struct join_status, elem);
+    if (js->thread->tid == tid) {
+      lock_acquire(&js->lock); // Acquire before so only one thread can get into the conditional
+      if (!js->joined) {
+        // Set to true to avoid waiting on the same thread twice
+        js->joined = true;
+        lock_release(&js->lock);
+        if (js->thread->status == THREAD_DYING) {
+          // Thread was part of the same process but has already terminated
+          lock_release(&t->pcb->lock);
+          return js->thread->tid;
+        } else {
+          // Block on the thread
+          sema_down(&js->join);
+          
+          // Free the join status and remove it from the list
+          list_remove(e);
+          free(js);
+          lock_release(&t->pcb->lock);
+          return tid;
+        }
+      } else {
+        // INVALID: Thread has already been joined on
+        lock_release(&js->lock);
+        lock_release(&t->pcb->lock);
+        return TID_ERROR;
+      }
+    }
+  }
+  
+  // INVALID: Thread is not a part of this process
+  lock_release(&t->pcb->lock);
+  return TID_ERROR;
+}
 
 /* Validate ARGS by ensuring each address points to valid memory.
  * Valid pointers are not null, reference below PHYS_BASE/are not

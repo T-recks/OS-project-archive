@@ -266,9 +266,10 @@ tid_t pthread_execute(stub_fun sfun, pthread_fun tfun, void* arg) {
   info->tf = tfun;
   info->arg = arg;
   sema_init(&info->finished, 0); // up on finish
-
+  
   /* Create a new thread to execute. */
   tid = thread_create("REPLACE ME", PRI_DEFAULT, start_pthread, (void*)info);
+  sema_down(&info->finished);
   return tid;
 }
 
@@ -315,6 +316,7 @@ void start_pthread(void* arg) {
      arguments on the stack in the form of a `struct intr_frame',
      we just point the stack pointer (%esp) to our stack frame
      and jump to it. */
+  sema_up(&info->finished);
   asm volatile("movl %0, %%esp; jmp intr_exit" : : "g"(&if_) : "memory");
   NOT_REACHED();
 }
