@@ -174,7 +174,8 @@ int process_wait(pid_t child_pid) {
     // Not a direct child of the calling process
     return -1;
   }
-  // Down the waiting semaphore of the child
+  // Down the waiting semaphore of the child (release locks to avoid deadlock)
+  release_all_locks();
   sema_down(&w->sema_wait);
   // After waking, store the exit code from the shared data
   int exit_code = w->exit_code;
@@ -361,6 +362,8 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
   list_init(t->pcb->threads);
   
   lock_init(&t->pcb->lock);
+  cond_init(&t->pcb->cond);
+  t->pcb->exiting = false;
   
   // add each arg to the argv list & increment argc
   char *token, *save_ptr;

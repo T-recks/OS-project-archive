@@ -37,7 +37,6 @@ void close_all_files(void) {
     return;
   }
 
-  lock_acquire(&filesys_lock);
   while (!list_empty(fd_table)) {
     struct list_elem* e = list_pop_front(fd_table);
     struct file_data* f = list_entry(e, struct file_data, elem);
@@ -48,7 +47,6 @@ void close_all_files(void) {
       free(f);
     }
   }
-  lock_release(&filesys_lock);
 }
 
 void clear_cmdline(void) {
@@ -57,15 +55,12 @@ void clear_cmdline(void) {
   if (argv == NULL)
     return;
 
-  //  lock_acquire(&pcb->lock);
   while (!list_empty(argv)) {
     struct list_elem* e = list_pop_front(argv);
     struct word* w = list_entry(e, struct word, elem);
     list_remove(e);
     free(w);
   }
-
-  //  lock_release(&pcb->lock);
 }
 
 void free_all_locks(void) {
@@ -74,7 +69,6 @@ void free_all_locks(void) {
   if (locks == NULL)
     return;
 
-  //  lock_acquire(&pcb->lock);
   while (!list_empty(locks)) {
     struct list_elem* e = list_pop_front(locks);
     struct user_lock* w = list_entry(e, struct user_lock, elem);
@@ -82,8 +76,6 @@ void free_all_locks(void) {
     free(w->lock_kernel);
     free(w);
   }
-
-  //  lock_release(&pcb->lock);
 }
 
 void free_all_semaphores(void) {
@@ -92,7 +84,6 @@ void free_all_semaphores(void) {
   if (semas == NULL)
     return;
 
-  //  lock_acquire(&pcb->lock);
   while (!list_empty(semas)) {
     struct list_elem* e = list_pop_front(semas);
     struct user_sema* w = list_entry(e, struct user_sema, elem);
@@ -100,8 +91,6 @@ void free_all_semaphores(void) {
     free(w->sema_kernel);
     free(w);
   }
-
-  //  lock_release(&pcb->lock);
 }
 
 void release_all_locks(void) {
@@ -110,7 +99,6 @@ void release_all_locks(void) {
   if (locks == NULL)
     return;
 
-  //  lock_acquire(&pcb->lock);
   struct list_elem* e;
   for (e = list_begin(locks); e != list_end(locks); e = list_next(e)) {
     struct user_lock* ul = list_entry(e, struct user_lock, elem);
@@ -120,13 +108,29 @@ void release_all_locks(void) {
     }
   }
 
-  //  lock_release(&pcb->lock);
 }
 
 static int handle_practice(int val) { return val + 1; }
 
 void handle_exit(int status) {
   struct process* pcb = thread_current()->pcb;
+  lock_acquire(&pcb->lock);
+  if (pcb->exiting) {
+    // Process already exiting
+    lock_release(&pcb->lock);
+    return;
+  }
+  pcb->exiting = true;
+  
+  // TODO: might only want the main thread to be getting past the conditional
+  
+  while (list_size(pcb->threads) > 1) {
+    cond_wait(&pcb->cond, &pcb->lock);
+  }
+  
+  // At this point, should only be 1 active thread; no more synchronization required
+  lock_release(&pcb->lock);
+  
   printf("%s: exit(%d)\n", pcb->process_name, status);
   if (pcb->ws == NULL) {
     goto done;
@@ -160,13 +164,11 @@ void handle_exit(int status) {
     }
   }
 done:
-  lock_acquire(&pcb->lock);
   close_all_files();
   clear_cmdline();
   //  release_all_locks();
   free_all_locks();
   free_all_semaphores();
-  lock_release(&pcb->lock);
   process_exit();
 }
 
@@ -499,7 +501,8 @@ static tid_t handle_sys_pthread_join(tid_t tid) {
           lock_release(&t->pcb->lock);
           return js->tid;
         } else {
-          // Block on the thread
+          // Block on the thread (release locks to avoid deadlock)
+          release_all_locks();
           sema_down(&js->sema);
           
           // Free the join status and remove it from the list
@@ -525,8 +528,12 @@ static tid_t handle_sys_pthread_join(tid_t tid) {
 static void handle_sys_pthread_exit_main(void) {
   struct thread *t = thread_current();
   
-  // Wake any waiters
+  lock_acquire(&t->pcb->lock);
+  // Wake any waiters and signal
   sema_up(&t->js->sema);
+  cond_signal(&t->pcb->cond, &t->pcb->lock);
+  lock_release(&t->pcb->lock);
+  
   
   // Join on all unjoined threads
   struct list* threads = t->pcb->threads;
@@ -542,7 +549,7 @@ static void handle_sys_pthread_exit_main(void) {
   handle_exit(0);
 }
 
-static void handle_sys_pthread_exit(void) {
+void handle_sys_pthread_exit(void) {
   struct thread *t = thread_current();
   if (t->pcb->main_thread->tid == t->tid) {
     // Exiting thread is main thread
@@ -550,8 +557,11 @@ static void handle_sys_pthread_exit(void) {
   } else {
     // Deallocate the user stack
   
-    // Wake waiters
+    lock_acquire(&t->pcb->lock);
+    // Wake any waiters and signal
     sema_up(&t->js->sema);
+    cond_signal(&t->pcb->cond, &t->pcb->lock);
+    lock_release(&t->pcb->lock);
   
     // Kill the thread
     thread_exit();
