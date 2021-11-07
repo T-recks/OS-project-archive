@@ -279,6 +279,7 @@ void start_pthread(void* arg) {
   struct intr_frame if_;
   struct thread* t = thread_current();
   t->pcb = info->pcb;
+  process_activate();
 
   // initialize the interrupt frame
   memset(&if_, 0, sizeof if_);
@@ -296,15 +297,15 @@ void start_pthread(void* arg) {
   // then push the pthread_fun, then push a fake RA to the stub_fun
 
   // copy arg to stack
-  if_.esp -= sizeof(&info->arg);
-  memcpy(if_.esp, &info->arg, sizeof(&info->arg));
+  if_.esp -= 4;
+  *(int*)if_.esp = info->arg;
   // copy pthread_fun to stack
-  if_.esp -= sizeof(info->tf);
-  memcpy(if_.esp, &info->tf, sizeof(&info->tf));
+  if_.esp -= 4;
+  *(int*)if_.esp = info->tf;
   //push a dummy (0) return address
   void* nullptr = NULL;
   if_.esp -= 4;
-  memcpy(if_.esp, &nullptr, sizeof(void*));
+  *(int*)if_.esp = &nullptr;
 
   if_.eip = info->sf;
 
@@ -322,21 +323,27 @@ void start_pthread(void* arg) {
 empty page in user virtual memory. */
 static bool setup_thread_stack(void** esp) {
   struct thread* t = thread_current();
-  *esp = PHYS_BASE - PGSIZE;
-  while (pagedir_get_page(t->pcb->pagedir, *esp) != NULL) {
-    *esp -= PGSIZE;
+  
+  void* upage = PHYS_BASE - PGSIZE;
+  while (pagedir_get_page(t->pcb->pagedir, upage) != NULL) {
+    upage -= PGSIZE;
   }
-
   uint8_t* kpage;
   bool success = false;
   // 49, 51, 62, 69
   kpage = palloc_get_page(PAL_USER | PAL_ZERO);
   if (kpage != NULL) {
-    success = pagedir_set_page(t->pcb->pagedir, ((uint8_t*)*esp), kpage, true);
+    success = (pagedir_get_page(t->pcb->pagedir, upage) == NULL &&
+               pagedir_set_page(t->pcb->pagedir, upage, kpage, true));
     if (!success) {
       palloc_free_page(kpage);
     }
+  } else {
+    return false;
   }
+  upage += PGSIZE;
+  *esp = upage;
+  
   return success;
 }
 
