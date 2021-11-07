@@ -524,7 +524,7 @@ static tid_t handle_sys_pthread_join(tid_t tid) {
 
 static void handle_sys_pthread_exit_main(void) {
   struct thread *t = thread_current();
-  
+
   // Wake any waiters
   sema_up(&t->js->sema);
   
@@ -549,7 +549,8 @@ static void handle_sys_pthread_exit(void) {
     handle_sys_pthread_exit_main();
   } else {
     // Deallocate the user stack
-  
+    pagedir_clear_page(t->pcb->pagedir, t->thread_stack);
+    palloc_free_page(t->thread_stack);
     // Wake waiters
     sema_up(&t->js->sema);
   
