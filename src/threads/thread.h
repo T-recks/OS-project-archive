@@ -122,7 +122,7 @@ struct inherited_priority {
 
 /* Shared between the main thread and a child, one for each newly created thread. */
 struct join_status {
-  struct semaphore join;        /* Semaphore to indicate the process has exited */
+  struct semaphore sema;        /* Semaphore to indicate the process has exited */
   struct lock lock;             /* Lock to protect the joined boolean */
   bool joined;                  /* Indicate this thread has been joined on */
   struct thread *thread;        /* Spawned thread */

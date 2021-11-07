@@ -505,7 +505,7 @@ static tid_t handle_sys_pthread_join(tid_t tid) {
           return js->thread->tid;
         } else {
           // Block on the thread
-          sema_down(&js->join);
+          sema_down(&js->sema);
           
           // Free the join status and remove it from the list
           list_remove(e);

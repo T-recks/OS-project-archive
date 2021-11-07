@@ -52,6 +52,7 @@ struct kernel_thread_frame {
 
 struct pthread_exec_info {
   struct process* pcb;
+  struct thread* thread;
   stub_fun sf;
   pthread_fun tf;
   void* arg;
@@ -265,12 +266,29 @@ tid_t pthread_execute(stub_fun sfun, pthread_fun tfun, void* arg) {
   info->sf = sfun;
   info->tf = tfun;
   info->arg = arg;
+  info->success = false;
   sema_init(&info->finished, 0); // up on finish
+  
+  // Set up the join status
+  struct join_status *js = malloc(sizeof(struct join_status));
+  sema_init(&js->sema, 0);
+  lock_init(&js->lock);
+  js->joined = false;
+  list_push_back(thread_current()->pcb->threads, &js->elem);
   
   /* Create a new thread to execute. */
   tid = thread_create("REPLACE ME", PRI_DEFAULT, start_pthread, (void*)info);
   sema_down(&info->finished);
-  return tid;
+  
+  // Spawned thread has finished
+  if (info->success) {
+    js->thread = info->thread;
+    return tid;
+  } else {
+    free(info);
+    free(js);
+    return TID_ERROR;
+  }
 }
 
 void start_pthread(void* arg) {
@@ -281,6 +299,8 @@ void start_pthread(void* arg) {
   struct thread* t = thread_current();
   t->pcb = info->pcb;
   process_activate();
+  
+  info->thread = t;
 
   // initialize the interrupt frame
   memset(&if_, 0, sizeof if_);
@@ -316,6 +336,7 @@ void start_pthread(void* arg) {
      arguments on the stack in the form of a `struct intr_frame',
      we just point the stack pointer (%esp) to our stack frame
      and jump to it. */
+  info->success = true;
   sema_up(&info->finished);
   asm volatile("movl %0, %%esp; jmp intr_exit" : : "g"(&if_) : "memory");
   NOT_REACHED();
