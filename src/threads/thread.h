@@ -105,7 +105,9 @@ struct thread {
   struct list_elem proc_elem; /* List element for threads spawned by this process list */
   struct list_elem sema_elem; /* List element for threads waiting for a lock */
 
-
+  struct thread* waiter;      /* The thread waiting on this thread to finish (relevant only to the main thread) */
+  struct join_status *js;     /* Join status of this thread */
+  
 #ifdef USERPROG
   /* Owned by process.c. */
   struct process* pcb; /* Process control block if this thread is a userprog */
@@ -126,7 +128,8 @@ struct join_status {
   struct semaphore sema;        /* Semaphore to indicate the process has exited */
   struct lock lock;             /* Lock to protect the joined boolean */
   bool joined;                  /* Indicate this thread has been joined on */
-  struct thread *thread;        /* Spawned thread */
+  tid_t tid;                    /* tid of the spawned thread */
+  enum thread_status status;    /* Status of the spawned thread */
   struct list_elem elem;
 };
 

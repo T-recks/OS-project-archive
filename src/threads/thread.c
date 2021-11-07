@@ -52,7 +52,8 @@ struct kernel_thread_frame {
 
 struct pthread_exec_info {
   struct process* pcb;
-  struct thread* thread;
+  enum thread_status status;
+  tid_t tid;
   stub_fun sf;
   pthread_fun tf;
   void* arg;
@@ -282,7 +283,8 @@ tid_t pthread_execute(stub_fun sfun, pthread_fun tfun, void* arg) {
   
   // Spawned thread has finished
   if (info->success) {
-    js->thread = info->thread;
+    js->status = info->status;
+    js->tid = info->tid;
     return tid;
   } else {
     free(info);
@@ -300,7 +302,8 @@ void start_pthread(void* arg) {
   t->pcb = info->pcb;
   process_activate();
   
-  info->thread = t;
+  info->status = t->status;
+  info->tid = t->tid;
 
   // initialize the interrupt frame
   memset(&if_, 0, sizeof if_);
