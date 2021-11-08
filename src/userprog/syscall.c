@@ -129,8 +129,8 @@ static int handle_practice(int val) { return val + 1; }
 void handle_exit(int status) {
   struct thread* t = thread_current();
   struct process* pcb = t->pcb;
-  lock_acquire(&pcb->cond_lock);
   
+  lock_acquire(&pcb->cond_lock);
   while (pcb->num_threads > 0) {
     cond_wait(&pcb->cond, &pcb->cond_lock);
   }
@@ -526,8 +526,14 @@ static tid_t handle_sys_pthread_join(tid_t tid) {
           // Block on the thread (release locks to avoid deadlock)
           release_all_locks();
           lock_release(&t->pcb->lock);
+          
+          t->pcb->num_threads -= 1;
+          lock_acquire(&t->pcb->cond_lock);
+          cond_signal(&t->pcb->cond, &t->pcb->cond_lock);
+          lock_release(&t->pcb->cond_lock);
+          
           sema_down(&js->sema);
-
+          
           // Free the join status and remove it from the list
           lock_acquire(&t->pcb->lock);
           list_remove(e);
@@ -593,11 +599,16 @@ void handle_sys_pthread_exit(void) {
 
     sema_up(&t->js->sema);
     // Wake any waiters and signal
-    t->pcb->num_threads -= 1;
-    lock_release(&t->pcb->lock);
-    lock_acquire(&t->pcb->cond_lock);
-    cond_signal(&t->pcb->cond, &t->pcb->cond_lock);
-    lock_release(&t->pcb->cond_lock);
+    
+    if (!t->js->joined) {
+      t->pcb->num_threads -= 1;
+      lock_release(&t->pcb->lock);
+      lock_acquire(&t->pcb->cond_lock);
+      cond_signal(&t->pcb->cond, &t->pcb->cond_lock);
+      lock_release(&t->pcb->cond_lock);
+    } else {
+      lock_release(&t->pcb->lock);
+    }
 
     // Kill the thread
     thread_exit();
