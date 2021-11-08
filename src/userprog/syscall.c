@@ -115,7 +115,7 @@ void free_all_join_statuses(void) {
   struct list* threads = pcb->threads;
   if (threads == NULL)
     return;
-  
+
   while (!list_empty(threads)) {
     struct list_elem* e = list_pop_front(threads);
     struct join_status* js = list_entry(e, struct join_status, elem);
@@ -186,7 +186,7 @@ done:
   //  release_all_locks();
   free_all_locks();
   free_all_semaphores();
-  free_all_join_statuses();
+//  free_all_join_statuses();
   process_exit();
 }
 
