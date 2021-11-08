@@ -36,6 +36,7 @@ struct process {
   struct list* semaphores;    /* All semaphores initialized by this process */
   struct list* threads;       /* Join statuses of all threads spawned by this process */
   struct condition cond;      /* CV for if only 1 thread is still alive */
+  struct lock cond_lock;      /* Lock for the CV */
   int num_threads;            /* Number of active threads in this process */
   bool exiting;               /* Indicate this process is exiting */
 };
