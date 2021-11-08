@@ -401,8 +401,8 @@ static bool handle_lock_acquire(char* lock) {
     if (lock_u->lock_user == lock) {
       struct thread* holder = lock_u->lock_kernel->holder;
       if (holder == NULL || holder->tid != thread_current()->tid) {
-        lock_acquire(lock_u->lock_kernel);
         lock_release(&pcb->lock);
+        lock_acquire(lock_u->lock_kernel);
         return true;
       } else {
         // Process already holds this lock
