@@ -113,7 +113,8 @@ void release_all_locks(void) {
 static int handle_practice(int val) { return val + 1; }
 
 void handle_exit(int status) {
-  struct process* pcb = thread_current()->pcb;
+  struct thread* t = thread_current();
+  struct process* pcb = t->pcb;
   lock_acquire(&pcb->lock);
   if (pcb->exiting) {
     // Process already exiting
@@ -124,8 +125,10 @@ void handle_exit(int status) {
   
   // TODO: might only want the main thread to be getting past the conditional
   
-  while (list_size(pcb->threads) > 1) {
-    cond_wait(&pcb->cond, &pcb->lock);
+  if (t->tid != pcb->main_thread->tid) {
+    while (list_size(pcb->threads) > 1) {
+      cond_wait(&pcb->cond, &pcb->lock);
+    }
   }
   
   // At this point, should only be 1 active thread; no more synchronization required
