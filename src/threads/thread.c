@@ -295,6 +295,7 @@ tid_t pthread_execute(stub_fun sfun, pthread_fun tfun, void* arg) {
   
   // Spawned thread has finished
   if (info->success) {
+    thread_current()->pcb->num_threads += 1;
     js->status = info->status;
     js->tid = info->tid;
     return tid;

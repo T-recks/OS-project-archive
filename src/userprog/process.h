@@ -36,6 +36,7 @@ struct process {
   struct list* semaphores;    /* All semaphores initialized by this process */
   struct list* threads;       /* Join statuses of all threads spawned by this process */
   struct condition cond;      /* CV for if only 1 thread is still alive */
+  int num_threads;            /* Number of active threads in this process */
   bool exiting;               /* Indicate this process is exiting */
 };
 
@@ -72,13 +73,13 @@ typedef struct word {
 } word_t;
 
 struct user_lock {
-  char* lock_user;          /* User-level lock */
+  char lock_user;          /* User-level lock */
   struct lock* lock_kernel; /* Mapped kernel-level lock */
   struct list_elem elem;
 };
 
 struct user_sema {
-  char* sema_user;               /* User-level semaphore */
+  char sema_user;               /* User-level semaphore */
   struct semaphore* sema_kernel; /* Mapped kernel-level semaphore */
   struct list_elem elem;
 };

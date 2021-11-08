@@ -139,10 +139,8 @@ void handle_exit(int status) {
 
   // TODO: might only want the main thread to be getting past the conditional
 
-  if (t->tid != pcb->main_thread->tid) {
-    while (list_size(pcb->threads) > 1) {
-      cond_wait(&pcb->cond, &pcb->lock);
-    }
+  while (pcb->num_threads > 1) {
+    cond_wait(&pcb->cond, &pcb->lock);
   }
 
   // At this point, should only be 1 active thread; no more synchronization required
@@ -186,7 +184,6 @@ done:
   //  release_all_locks();
   free_all_locks();
   free_all_semaphores();
-//  free_all_join_statuses();
   process_exit();
 }
 
@@ -572,6 +569,7 @@ static void handle_sys_pthread_exit_main(void) {
   }
 
   // Process exit
+  t->pcb->num_threads -= 1;
   handle_exit(0);
 }
 
@@ -594,6 +592,7 @@ void handle_sys_pthread_exit(void) {
     lock_release(&t->pcb->lock);
 
     // Kill the thread
+    t->pcb->num_threads -= 1;
     thread_exit();
   }
 }
