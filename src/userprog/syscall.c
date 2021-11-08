@@ -136,18 +136,18 @@ void handle_exit(int status) {
     return;
   }
   pcb->exiting = true;
-  
+
   // TODO: might only want the main thread to be getting past the conditional
-  
+
   if (t->tid != pcb->main_thread->tid) {
     while (list_size(pcb->threads) > 1) {
       cond_wait(&pcb->cond, &pcb->lock);
     }
   }
-  
+
   // At this point, should only be 1 active thread; no more synchronization required
   lock_release(&pcb->lock);
-  
+
   printf("%s: exit(%d)\n", pcb->process_name, status);
   if (pcb->ws == NULL) {
     goto done;
@@ -469,7 +469,7 @@ static bool handle_sema_init(char* sema, int val) {
   return true;
 }
 
-static bool handle_sema_change(char *sema, bool up) {
+static bool handle_sema_change(char* sema, bool up) {
   struct process* pcb = thread_current()->pcb;
   struct list* semaphores = pcb->semaphores;
   struct list_elem* e;
@@ -506,12 +506,12 @@ static tid_t handle_sys_pthread_create(stub_fun sfun, pthread_fun tfun, void* ar
 }
 
 static tid_t handle_sys_pthread_join(tid_t tid) {
-  struct thread *t = thread_current();
+  struct thread* t = thread_current();
   struct list* joins = t->pcb->threads;
-  struct list_elem *e;
+  struct list_elem* e;
   lock_acquire(&t->pcb->lock);
   for (e = list_begin(joins); e != list_end(joins); e = list_next(e)) {
-    struct join_status *js = list_entry(e, struct join_status, elem);
+    struct join_status* js = list_entry(e, struct join_status, elem);
     if (js->tid == tid) {
       lock_acquire(&js->lock); // Acquire before so only one thread can get into the conditional
       if (!js->joined) {
@@ -527,7 +527,7 @@ static tid_t handle_sys_pthread_join(tid_t tid) {
           release_all_locks();
           lock_release(&t->pcb->lock);
           sema_down(&js->sema);
-          
+
           // Free the join status and remove it from the list
           lock_acquire(&t->pcb->lock);
           list_remove(e);
@@ -543,40 +543,40 @@ static tid_t handle_sys_pthread_join(tid_t tid) {
       }
     }
   }
-  
+
   // INVALID: Thread is not a part of this process
   lock_release(&t->pcb->lock);
   return TID_ERROR;
 }
 
 static void handle_sys_pthread_exit_main(void) {
-  struct thread *t = thread_current();
-  
+  struct thread* t = thread_current();
+
   sema_up(&t->js->sema);
   lock_acquire(&t->pcb->lock);
   // Wake any waiters and signal
   cond_signal(&t->pcb->cond, &t->pcb->lock);
   lock_release(&t->pcb->lock);
-  
+
   // Join on all unjoined threads
   struct list* threads = t->pcb->threads;
-  struct list_elem *e = list_begin(threads);
+  struct list_elem* e = list_begin(threads);
   while (e != list_end(threads)) {
-    struct join_status *js = list_entry(e, struct join_status, elem);
-    struct list_elem *temp = e;
+    struct join_status* js = list_entry(e, struct join_status, elem);
+    struct list_elem* temp = e;
     e = list_next(temp);
     if (!js->joined && js->tid != t->tid) {
       // main is exiting too soon again
       handle_sys_pthread_join(js->tid);
     }
   }
-  
+
   // Process exit
   handle_exit(0);
 }
 
 void handle_sys_pthread_exit(void) {
-  struct thread *t = thread_current();
+  struct thread* t = thread_current();
   if (t->pcb->main_thread->tid == t->tid) {
     // Exiting thread is main thread
     handle_sys_pthread_exit_main();
@@ -592,15 +592,13 @@ void handle_sys_pthread_exit(void) {
     // Wake any waiters and signal
     cond_signal(&t->pcb->cond, &t->pcb->lock);
     lock_release(&t->pcb->lock);
-  
+
     // Kill the thread
     thread_exit();
   }
 }
 
-static tid_t handle_get_tid(void) {
-  return thread_current()->tid;
-}
+static tid_t handle_get_tid(void) { return thread_current()->tid; }
 
 /* Validate ARGS by ensuring each address points to valid memory.
  * Valid pointers are not null, reference below PHYS_BASE/are not
