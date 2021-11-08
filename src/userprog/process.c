@@ -362,6 +362,7 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
   list_init(t->pcb->threads);
   
   lock_init(&t->pcb->lock);
+  lock_init(&t->pcb->cond_lock);
   cond_init(&t->pcb->cond);
   t->pcb->exiting = false;
   

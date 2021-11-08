@@ -129,6 +129,13 @@ static int handle_practice(int val) { return val + 1; }
 void handle_exit(int status) {
   struct thread* t = thread_current();
   struct process* pcb = t->pcb;
+  lock_acquire(&pcb->cond_lock);
+  
+  while (pcb->num_threads > 0) {
+    cond_wait(&pcb->cond, &pcb->cond_lock);
+  }
+  lock_release(&pcb->cond_lock);
+  
   lock_acquire(&pcb->lock);
   if (pcb->exiting) {
     // Process already exiting
@@ -137,10 +144,6 @@ void handle_exit(int status) {
   }
   pcb->exiting = true;
   // TODO: might only want the main thread to be getting past the conditional
-
-  while (pcb->num_threads > 0) {
-    cond_wait(&pcb->cond, &pcb->lock);
-  }
 
   // At this point, should only be 1 active thread; no more synchronization required
   lock_release(&pcb->lock);
@@ -550,10 +553,10 @@ static void handle_sys_pthread_exit_main(void) {
   struct thread* t = thread_current();
 
   sema_up(&t->js->sema);
-  lock_acquire(&t->pcb->lock);
+  lock_acquire(&t->pcb->cond_lock);
   // Wake any waiters and signal
-  cond_signal(&t->pcb->cond, &t->pcb->lock);
-  lock_release(&t->pcb->lock);
+  cond_signal(&t->pcb->cond, &t->pcb->cond_lock);
+  lock_release(&t->pcb->cond_lock);
 
   // Join on all unjoined threads
   struct list* threads = t->pcb->threads;
@@ -591,8 +594,10 @@ void handle_sys_pthread_exit(void) {
     sema_up(&t->js->sema);
     // Wake any waiters and signal
     t->pcb->num_threads -= 1;
-    cond_signal(&t->pcb->cond, &t->pcb->lock);
     lock_release(&t->pcb->lock);
+    lock_acquire(&t->pcb->cond_lock);
+    cond_signal(&t->pcb->cond, &t->pcb->cond_lock);
+    lock_release(&t->pcb->cond_lock);
 
     // Kill the thread
     thread_exit();
