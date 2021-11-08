@@ -482,7 +482,7 @@ static tid_t handle_sys_pthread_create(stub_fun sfun, pthread_fun tfun, void* ar
 static tid_t handle_sys_pthread_join(tid_t tid) {
   struct thread *t = thread_current();
   if (t->pcb->main_thread->tid == tid) {
-    sema_down(&t->js->sema);
+    sema_down(&t->pcb->main_thread->js->sema);
     return tid;
   }
   struct list* joins = t->pcb->threads;
