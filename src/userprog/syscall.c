@@ -359,6 +359,10 @@ static bool handle_lock_init(char lock) {
   }
 
   struct lock* lock_k = malloc(sizeof(struct lock));
+  if (lock_k == NULL) {
+    free(lock_u);
+    handle_exit(-1);
+  }
   lock_init(lock_k);
   lock_u->lock_user = lock;
   lock_u->lock_kernel = lock_k;
@@ -436,6 +440,10 @@ static bool handle_sema_init(char sema, int val) {
   }
 
   struct semaphore* sema_k = malloc(sizeof(struct semaphore));
+  if (sema_k == NULL) {
+    free(sema_u);
+    handle_exit(-1);
+  }
   sema_init(sema_k, val);
   sema_u->sema_user = sema;
   sema_u->sema_kernel = sema_k;
@@ -481,10 +489,6 @@ static tid_t handle_sys_pthread_create(stub_fun sfun, pthread_fun tfun, void* ar
 
 static tid_t handle_sys_pthread_join(tid_t tid) {
   struct thread *t = thread_current();
-  if (t->pcb->main_thread->tid == tid) {
-    sema_down(&t->js->sema);
-    return tid;
-  }
   struct list* joins = t->pcb->threads;
   struct list_elem *e;
   lock_acquire(&t->pcb->lock);
@@ -531,17 +535,10 @@ static void handle_sys_pthread_exit_main(void) {
   struct thread *t = thread_current();
   
   lock_acquire(&t->pcb->lock);
-  if (t->js->joined) {
-    lock_release(&t->pcb->lock);
-    return;
-  }
-  
-  t->js->joined = true;
   // Wake any waiters and signal
   sema_up(&t->js->sema);
   cond_signal(&t->pcb->cond, &t->pcb->lock);
   lock_release(&t->pcb->lock);
-  
   
   // Join on all unjoined threads
   struct list* threads = t->pcb->threads;
@@ -550,7 +547,8 @@ static void handle_sys_pthread_exit_main(void) {
     struct join_status *js = list_entry(e, struct join_status, elem);
     struct list_elem *temp = e;
     e = list_next(temp);
-    if (!js->joined) {
+    if (!js->joined && js->tid != t->tid) {
+      // main is exiting too soon again
       handle_sys_pthread_join(js->tid);
     }
   }
@@ -579,6 +577,10 @@ void handle_sys_pthread_exit(void) {
     // Kill the thread
     thread_exit();
   }
+}
+
+static tid_t handle_get_tid(void) {
+  return thread_current()->tid;
 }
 
 /* Validate ARGS by ensuring each address points to valid memory.
@@ -748,5 +750,7 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       //      validate_args(f, args, 1);
       f->eax = handle_sema_change((char)args[1], true);
       break;
+    case SYS_GET_TID:
+      f->eax = handle_get_tid();
   }
 }

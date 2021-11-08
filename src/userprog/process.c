@@ -373,6 +373,7 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
   js->tid = t->tid;
   js->status = t->status;
   t->js = js;
+  list_push_back(t->pcb->threads, &js->elem);
   
   // add each arg to the argv list & increment argc
   char *token, *save_ptr;

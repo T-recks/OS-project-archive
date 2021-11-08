@@ -255,6 +255,10 @@ tid_t pthread_execute(stub_fun sfun, pthread_fun tfun, void* arg) {
   // setup stuff
   struct pthread_exec_info* info =
       (struct pthread_exec_info*)malloc(sizeof(struct pthread_exec_info));
+  
+  if (info == NULL) {
+    return TID_ERROR;
+  }
 
   /**
    * 1. pack pthread_exec_info
@@ -274,6 +278,10 @@ tid_t pthread_execute(stub_fun sfun, pthread_fun tfun, void* arg) {
   
   // Set up the join status
   struct join_status *js = malloc(sizeof(struct join_status));
+  if (js == NULL) {
+    free(info);
+    return TID_ERROR;
+  }
   sema_init(&js->sema, 0);
   lock_init(&js->lock);
   js->joined = false;
@@ -412,11 +420,10 @@ static void thread_enqueue(struct thread* t) {
 void donate_priority(struct thread* from, struct thread* to, struct lock* lock) {
   if (from->priority > to->priority) {
     struct inherited_priority* ip = malloc(sizeof(struct inherited_priority));
-    // TODO: exit if malloc is null
+    if (ip == NULL) {
+      handle_exit(-1);
+    }
 
-    // TODO: necessary to initialize the list element?
-    //    struct list_elem* e = malloc(sizeof(struct list_elem));
-    //    ip->elem = *e;
     ip->priority = from->priority;
     ip->from_lock = lock;
 
@@ -663,6 +670,9 @@ static void init_thread(struct thread* t, const char* name, int priority) {
 
 static void init_prio_list(struct thread* t, int priority) {
   struct inherited_priority* ip = malloc(sizeof(struct inherited_priority));
+  if (ip == NULL) {
+    handle_exit(-1);
+  }
   ip->priority = priority;
   ip->from_lock = NULL;
   list_push_back(&t->priorities, &ip->elem);
