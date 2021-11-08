@@ -73,13 +73,13 @@ typedef struct word {
 } word_t;
 
 struct user_lock {
-  char lock_user;          /* User-level lock */
+  char* lock_user;          /* User-level lock */
   struct lock* lock_kernel; /* Mapped kernel-level lock */
   struct list_elem elem;
 };
 
 struct user_sema {
-  char sema_user;               /* User-level semaphore */
+  char* sema_user;               /* User-level semaphore */
   struct semaphore* sema_kernel; /* Mapped kernel-level semaphore */
   struct list_elem elem;
 };
