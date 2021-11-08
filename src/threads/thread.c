@@ -53,7 +53,7 @@ struct kernel_thread_frame {
 
 struct pthread_exec_info {
   struct process* pcb;
-  struct join_status *js;
+  struct join_status* js;
   enum thread_status status;
   tid_t tid;
   stub_fun sf;
@@ -255,7 +255,7 @@ tid_t pthread_execute(stub_fun sfun, pthread_fun tfun, void* arg) {
   // setup stuff
   struct pthread_exec_info* info =
       (struct pthread_exec_info*)malloc(sizeof(struct pthread_exec_info));
-  
+
   if (info == NULL) {
     return TID_ERROR;
   }
@@ -275,9 +275,9 @@ tid_t pthread_execute(stub_fun sfun, pthread_fun tfun, void* arg) {
   info->arg = arg;
   info->success = false;
   sema_init(&info->finished, 0); // up on finish
-  
+
   // Set up the join status
-  struct join_status *js = malloc(sizeof(struct join_status));
+  struct join_status* js = malloc(sizeof(struct join_status));
   if (js == NULL) {
     free(info);
     return TID_ERROR;
@@ -286,16 +286,15 @@ tid_t pthread_execute(stub_fun sfun, pthread_fun tfun, void* arg) {
   lock_init(&js->lock);
   js->joined = false;
   list_push_back(thread_current()->pcb->threads, &js->elem);
-  
+
   info->js = js;
-  
+
   /* Create a new thread to execute. */
   tid = thread_create("REPLACE ME", PRI_DEFAULT, start_pthread, (void*)info);
   sema_down(&info->finished);
-  
+
   // Spawned thread has finished
   if (info->success) {
-    thread_current()->pcb->num_threads += 1;
     js->status = info->status;
     js->tid = info->tid;
     return tid;
@@ -313,8 +312,9 @@ void start_pthread(void* arg) {
   struct intr_frame if_;
   struct thread* t = thread_current();
   t->pcb = info->pcb;
+  thread_current()->pcb->num_threads += 1;
   process_activate();
-  
+
   info->status = t->status;
   info->tid = t->tid;
   t->js = info->js;
@@ -363,7 +363,7 @@ void start_pthread(void* arg) {
 empty page in user virtual memory. */
 static bool setup_thread_stack(void** esp) {
   struct thread* t = thread_current();
-  
+
   void* upage = PHYS_BASE - PGSIZE;
   while (pagedir_get_page(t->pcb->pagedir, upage) != NULL) {
     upage -= PGSIZE;
@@ -384,7 +384,7 @@ static bool setup_thread_stack(void** esp) {
   t->thread_stack = upage;
   upage += PGSIZE;
   *esp = upage;
-  
+
   return success;
 }
 
@@ -849,7 +849,7 @@ static void schedule(void) {
   if (cur != next)
     prev = switch_threads(cur, next);
   thread_switch_tail(prev);
-  
+
   if (thread_current()->pcb != NULL && thread_current()->pcb->exiting) {
     // Process is exiting, immediately terminate the thread
     handle_sys_pthread_exit();

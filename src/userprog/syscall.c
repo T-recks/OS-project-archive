@@ -136,10 +136,9 @@ void handle_exit(int status) {
     return;
   }
   pcb->exiting = true;
-
   // TODO: might only want the main thread to be getting past the conditional
 
-  while (pcb->num_threads > 1) {
+  while (pcb->num_threads > 0) {
     cond_wait(&pcb->cond, &pcb->lock);
   }
 
@@ -168,6 +167,7 @@ void handle_exit(int status) {
   // Decrement the ref count of each of the child waiters
   struct list_elem* e;
   struct wait_status* w;
+
   for (e = list_begin(pcb->waits); e != list_end(pcb->waits); e = list_next(e)) {
     w = list_entry(e, struct wait_status, elem);
     lock_acquire(&w->lock);
@@ -580,19 +580,21 @@ void handle_sys_pthread_exit(void) {
     handle_sys_pthread_exit_main();
   } else {
     lock_acquire(&t->pcb->lock);
-    
+
     // Deallocate the user stack
-    void* page = pagedir_get_page(t->pcb->pagedir, t->thread_stack);
-    pagedir_clear_page(t->pcb->pagedir, t->thread_stack);
-    palloc_free_page(page);
-  
+    if (t->pcb->pagedir != NULL) {
+      void* page = pagedir_get_page(t->pcb->pagedir, t->thread_stack);
+      pagedir_clear_page(t->pcb->pagedir, t->thread_stack);
+      palloc_free_page(page);
+    }
+
     sema_up(&t->js->sema);
     // Wake any waiters and signal
+    t->pcb->num_threads -= 1;
     cond_signal(&t->pcb->cond, &t->pcb->lock);
     lock_release(&t->pcb->lock);
 
     // Kill the thread
-    t->pcb->num_threads -= 1;
     thread_exit();
   }
 }
@@ -686,6 +688,7 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       validate_args(f, args, 1);
       f->eax = args[1];
       handle_exit(args[1]);
+
       break;
     case SYS_EXEC:
       validate_args(f, args, 1);
