@@ -380,6 +380,7 @@ static bool setup_thread_stack(void** esp) {
   } else {
     return false;
   }
+  t->thread_stack = upage;
   upage += PGSIZE;
   *esp = upage;
   

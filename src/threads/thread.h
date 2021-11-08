@@ -86,7 +86,6 @@ struct thread {
   tid_t tid;                 /* Thread identifier. */
   enum thread_status status; /* Thread state. */
   char name[16];             /* Name (for debugging purposes). */
-  void* thread_stack;        /* Permanent pointer to top of thread stack */
   uint8_t* stack;            /* Saved stack pointer. */
   int priority;              /* Priority. */
   int expiration_time;       /* When this thread should be woken up */
@@ -97,7 +96,7 @@ struct thread {
   struct lock* blocked_on; // pointer to lock this thread is blocking on. NULL if not blocked
   struct list
       priorities; // list of priority values in order of when they were donated to the thread (includes original priority)
-
+  void* thread_stack;
   /* Shared between thread.c and synch.c. */
   struct list_elem elem; /* List element. */
 

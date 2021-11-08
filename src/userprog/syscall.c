@@ -110,6 +110,20 @@ void release_all_locks(void) {
   }
 }
 
+void free_all_join_statuses(void) {
+  struct process* pcb = thread_current()->pcb;
+  struct list* threads = pcb->threads;
+  if (threads == NULL)
+    return;
+  
+  while (!list_empty(threads)) {
+    struct list_elem* e = list_pop_front(threads);
+    struct join_status* js = list_entry(e, struct join_status, elem);
+    list_remove(e);
+    free(js);
+  }
+}
+
 static int handle_practice(int val) { return val + 1; }
 
 void handle_exit(int status) {
@@ -172,6 +186,7 @@ done:
   //  release_all_locks();
   free_all_locks();
   free_all_semaphores();
+  free_all_join_statuses();
   process_exit();
 }
 
@@ -566,13 +581,14 @@ void handle_sys_pthread_exit(void) {
     // Exiting thread is main thread
     handle_sys_pthread_exit_main();
   } else {
-    // Deallocate the user stack
-    pagedir_clear_page(t->pcb->pagedir, t->thread_stack);
-    void* page = pagedir_get_page(t->pcb->pagedir, t->thread_stack);
-    palloc_free_page(page);
-    
-    sema_up(&t->js->sema);
     lock_acquire(&t->pcb->lock);
+    
+    // Deallocate the user stack
+    void* page = pagedir_get_page(t->pcb->pagedir, t->thread_stack);
+    pagedir_clear_page(t->pcb->pagedir, t->thread_stack);
+    palloc_free_page(page);
+  
+    sema_up(&t->js->sema);
     // Wake any waiters and signal
     cond_signal(&t->pcb->cond, &t->pcb->lock);
     lock_release(&t->pcb->lock);
