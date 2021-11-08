@@ -345,7 +345,7 @@ static unsigned handle_tell(int fd) {
 
 static int handle_compute_e(int n) { return sys_sum_to_e(n); }
 
-static bool handle_lock_init(char lock) {
+static bool handle_lock_init(char* lock) {
   // TODO: use process lock to lock these functions
   if (lock == NULL) {
     return false;
@@ -370,7 +370,7 @@ static bool handle_lock_init(char lock) {
   return true;
 }
 
-static bool handle_lock_acquire(char lock) {
+static bool handle_lock_acquire(char* lock) {
   struct process* pcb = thread_current()->pcb;
   struct list* locks = pcb->locks;
   struct list_elem* e;
@@ -399,7 +399,7 @@ static bool handle_lock_acquire(char lock) {
   return false;
 }
 
-static bool handle_lock_release(char lock) {
+static bool handle_lock_release(char* lock) {
   struct process* pcb = thread_current()->pcb;
   struct list* locks = pcb->locks;
   struct list_elem* e;
@@ -428,7 +428,7 @@ static bool handle_lock_release(char lock) {
   return false;
 }
 
-static bool handle_sema_init(char sema, int val) {
+static bool handle_sema_init(char* sema, int val) {
   if (sema == NULL || val < 0) {
     return false;
   }
@@ -451,7 +451,7 @@ static bool handle_sema_init(char sema, int val) {
   return true;
 }
 
-static bool handle_sema_change(char sema, bool up) {
+static bool handle_sema_change(char *sema, bool up) {
   struct process* pcb = thread_current()->pcb;
   struct list* semaphores = pcb->semaphores;
   struct list_elem* e;
@@ -467,8 +467,8 @@ static bool handle_sema_change(char sema, bool up) {
         lock_release(&pcb->lock);
         return true;
       } else {
-        sema_down(sema_u->sema_kernel);
         lock_release(&pcb->lock);
+        sema_down(sema_u->sema_kernel);
         return true;
       }
     }
@@ -534,9 +534,9 @@ static tid_t handle_sys_pthread_join(tid_t tid) {
 static void handle_sys_pthread_exit_main(void) {
   struct thread *t = thread_current();
   
+  sema_up(&t->js->sema);
   lock_acquire(&t->pcb->lock);
   // Wake any waiters and signal
-  sema_up(&t->js->sema);
   cond_signal(&t->pcb->cond, &t->pcb->lock);
   lock_release(&t->pcb->lock);
   
@@ -568,9 +568,9 @@ void handle_sys_pthread_exit(void) {
     void* page = pagedir_get_page(t->pcb->pagedir, t->thread_stack);
     palloc_free_page(page);
     
+    sema_up(&t->js->sema);
     lock_acquire(&t->pcb->lock);
     // Wake any waiters and signal
-    sema_up(&t->js->sema);
     cond_signal(&t->pcb->cond, &t->pcb->lock);
     lock_release(&t->pcb->lock);
   
@@ -728,27 +728,27 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       f->eax = handle_sys_pthread_join((tid_t)args[1]);
       break;
     case SYS_LOCK_INIT:
-      f->eax = handle_lock_init((char)args[1]);
+      f->eax = handle_lock_init((char*)args[1]);
       break;
     case SYS_LOCK_ACQUIRE:
       //      validate_args(f, args, 1);
-      f->eax = handle_lock_acquire((char)args[1]);
+      f->eax = handle_lock_acquire((char*)args[1]);
       break;
     case SYS_LOCK_RELEASE:
       //      validate_args(f, args, 1);
-      f->eax = handle_lock_release((char)args[1]);
+      f->eax = handle_lock_release((char*)args[1]);
       break;
     case SYS_SEMA_INIT:
       //      validate_args(f, args, 2);
-      f->eax = handle_sema_init((char)args[1], (int)args[2]);
+      f->eax = handle_sema_init((char*)args[1], (int)args[2]);
       break;
     case SYS_SEMA_DOWN:
       //      validate_args(f, args, 1);
-      f->eax = handle_sema_change((char)args[1], false);
+      f->eax = handle_sema_change((char*)args[1], false);
       break;
     case SYS_SEMA_UP:
       //      validate_args(f, args, 1);
-      f->eax = handle_sema_change((char)args[1], true);
+      f->eax = handle_sema_change((char*)args[1], true);
       break;
     case SYS_GET_TID:
       f->eax = handle_get_tid();
