@@ -130,10 +130,9 @@ void handle_exit(int status) {
   struct thread* t = thread_current();
   struct process* pcb = t->pcb;
   lock_acquire(&pcb->lock);
+
   if (pcb->exiting) {
-    // Process already exiting
-    lock_release(&pcb->lock);
-    return;
+    PANIC("Process already exiting.");
   }
   pcb->exiting = true;
   // TODO: might only want the main thread to be getting past the conditional
@@ -167,7 +166,6 @@ void handle_exit(int status) {
   // Decrement the ref count of each of the child waiters
   struct list_elem* e;
   struct wait_status* w;
-
   for (e = list_begin(pcb->waits); e != list_end(pcb->waits); e = list_next(e)) {
     w = list_entry(e, struct wait_status, elem);
     lock_acquire(&w->lock);
@@ -549,6 +547,11 @@ static tid_t handle_sys_pthread_join(tid_t tid) {
 static void handle_sys_pthread_exit_main(void) {
   struct thread* t = thread_current();
 
+  if (t->pcb->exiting) {
+    // Process already exiting
+    return;
+  }
+
   sema_up(&t->js->sema);
   lock_acquire(&t->pcb->lock);
   // Wake any waiters and signal
@@ -569,7 +572,6 @@ static void handle_sys_pthread_exit_main(void) {
   }
 
   // Process exit
-  t->pcb->num_threads -= 1;
   handle_exit(0);
 }
 
@@ -586,6 +588,8 @@ void handle_sys_pthread_exit(void) {
       void* page = pagedir_get_page(t->pcb->pagedir, t->thread_stack);
       pagedir_clear_page(t->pcb->pagedir, t->thread_stack);
       palloc_free_page(page);
+    } else {
+      PANIC("Thread Exiting after process.");
     }
 
     sema_up(&t->js->sema);
