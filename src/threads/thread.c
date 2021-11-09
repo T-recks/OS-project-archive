@@ -853,10 +853,10 @@ static void schedule(void) {
     prev = switch_threads(cur, next);
   thread_switch_tail(prev);
 
-  if (thread_current()->pcb != NULL && thread_current()->pcb->exiting) {
-    // Process is exiting, immediately terminate the thread
-    handle_sys_pthread_exit();
-  }
+  // if (thread_current()->pcb != NULL && thread_current()->pcb->exiting) {
+  //   // Process is exiting, immediately terminate the thread
+  //   handle_sys_pthread_exit();
+  // }
 }
 
 /* Returns a tid to use for a new thread. */

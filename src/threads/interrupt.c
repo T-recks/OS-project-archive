@@ -11,6 +11,8 @@
 #include "devices/timer.h"
 #ifdef USERPROG
 #include "userprog/gdt.h"
+#include "userprog/syscall.h"
+#include "userprog/process.h"
 #endif
 
 /* Programmable Interrupt Controller (PIC) registers.
@@ -331,6 +333,10 @@ void intr_handler(struct intr_frame* frame) {
 
     in_external_intr = true;
     yield_on_return = false;
+  }
+
+  if (is_trap_from_userspace(frame) && thread_current()->pcb != NULL && thread_current()->pcb->exiting) {
+    handle_sys_pthread_exit();
   }
 
   /* Invoke the interrupt's handler. */
