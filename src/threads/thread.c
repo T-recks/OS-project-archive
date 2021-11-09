@@ -420,6 +420,9 @@ static void thread_enqueue(struct thread* t) {
 }
 
 void donate_priority(struct thread* from, struct thread* to, struct lock* lock) {
+  if (active_sched_policy != SCHED_PRIO) {
+    return;
+  }
   if (from->priority > to->priority) {
     struct inherited_priority* ip = malloc(sizeof(struct inherited_priority));
     if (ip == NULL) {
