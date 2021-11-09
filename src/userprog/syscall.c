@@ -129,13 +129,7 @@ static int handle_practice(int val) { return val + 1; }
 void handle_exit(int status) {
   struct thread* t = thread_current();
   struct process* pcb = t->pcb;
-  
-  lock_acquire(&pcb->cond_lock);
-  while (pcb->num_threads > 0) {
-    cond_wait(&pcb->cond, &pcb->cond_lock);
-  }
-  lock_release(&pcb->cond_lock);
-  
+
   lock_acquire(&pcb->lock);
   if (pcb->exiting) {
     // Process already exiting
@@ -147,6 +141,12 @@ void handle_exit(int status) {
 
   // At this point, should only be 1 active thread; no more synchronization required
   lock_release(&pcb->lock);
+  
+  lock_acquire(&pcb->cond_lock);
+  while (pcb->num_threads > 0) {
+    cond_wait(&pcb->cond, &pcb->cond_lock);
+  }
+  lock_release(&pcb->cond_lock);
 
   printf("%s: exit(%d)\n", pcb->process_name, status);
   if (pcb->ws == NULL) {
