@@ -588,26 +588,27 @@ void handle_sys_pthread_exit(void) {
     // Exiting thread is main thread
     handle_sys_pthread_exit_main();
   } else {
-    lock_acquire(&t->pcb->lock);
+    
 
     // Deallocate the user stack
     if (t->pcb->pagedir != NULL) {
       void* page = pagedir_get_page(t->pcb->pagedir, t->thread_stack);
+      lock_acquire(&t->pcb->lock);
       pagedir_clear_page(t->pcb->pagedir, t->thread_stack);
       palloc_free_page(page);
+      lock_release(&t->pcb->lock);
     }
 
     sema_up(&t->js->sema);
     // Wake any waiters and signal
     
     if (!t->js->joined) {
+      lock_acquire(&t->pcb->lock);
       t->pcb->num_threads -= 1;
       lock_release(&t->pcb->lock);
       lock_acquire(&t->pcb->cond_lock);
       cond_signal(&t->pcb->cond, &t->pcb->cond_lock);
       lock_release(&t->pcb->cond_lock);
-    } else {
-      lock_release(&t->pcb->lock);
     }
 
     // Kill the thread
