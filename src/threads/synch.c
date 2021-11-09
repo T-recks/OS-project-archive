@@ -242,7 +242,9 @@ bool lock_try_acquire(struct lock* lock) {
    handler. */
 void lock_release(struct lock* lock) {
   ASSERT(lock != NULL);
-  ASSERT(lock_held_by_current_thread(lock));
+  if(!lock_held_by_current_thread(lock)) {
+    return;
+  }
 
   // Need to disable interrupts in order to operate atomically
   enum intr_level old_level;
