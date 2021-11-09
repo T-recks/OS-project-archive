@@ -322,6 +322,10 @@ void intr_handler(struct intr_frame* frame) {
   bool external;
   intr_handler_func* handler;
 
+  if (is_trap_from_userspace(frame) && thread_current()->pcb != NULL && thread_current()->pcb->exiting) {
+    handle_sys_pthread_exit();
+  }
+
   /* External interrupts are special.
      We only handle one at a time (so interrupts must be off)
      and they need to be acknowledged on the PIC (see below).
@@ -333,10 +337,6 @@ void intr_handler(struct intr_frame* frame) {
 
     in_external_intr = true;
     yield_on_return = false;
-  }
-
-  if (is_trap_from_userspace(frame) && thread_current()->pcb != NULL && thread_current()->pcb->exiting) {
-    handle_sys_pthread_exit();
   }
 
   /* Invoke the interrupt's handler. */
