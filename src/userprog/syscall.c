@@ -225,11 +225,13 @@ static void handle_wait(struct intr_frame* f, unsigned* argv) {
   f->eax = status;
 }
 
-static bool handle_create(char* file, unsigned size) {
+static void handle_create(struct intr_frame*f, unsigned* argv) {
+  char* file = (char*)argv[1];
+  unsigned size = (unsigned)argv[2];
   lock_acquire(&filesys_lock);
   bool success = filesys_create(file, size);
   lock_release(&filesys_lock);
-  return success;
+  f->eax = success; 
 }
 
 static bool handle_remove(char* file) {
@@ -366,14 +368,13 @@ static void syscall_handler(struct intr_frame* f) {
   handler_t h = handler_table[args[0]];
   if (args[0] == SYS_PRACTICE || args[0] == SYS_COMPUTE_E || args[0] == SYS_WRITE ||
       args[0] == SYS_HALT     || args[0] == SYS_EXEC      || args[0] == SYS_EXIT  ||
-      args[0] == SYS_WAIT) {
+      args[0] == SYS_WAIT     || args[0] == SYS_CREATE) {
       validate_args(f, args, h.arity);
       h.fn(f, args);
       return;
   }
 
   switch (args[0]) {
-
     case SYS_REMOVE:
       validate_args(f, args, 1);
       f->eax = handle_remove((char*)args[1]);
@@ -415,4 +416,5 @@ void syscall_init(void) {
   handler_table[SYS_EXIT] = makeHandler(f_handle_exit, 1);
   handler_table[SYS_EXEC] = makeHandler(handle_exec, 1);
   handler_table[SYS_WAIT] = makeHandler(handle_wait, 1);
+  handler_table[SYS_CREATE] = makeHandler(handle_create, 2);
 }
