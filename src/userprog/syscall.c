@@ -364,7 +364,9 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
   }
 
   handler_t h = handler_table[args[0]];
-  if (args[0] == SYS_PRACTICE || args[0] == SYS_COMPUTE_E || args[0] == SYS_WRITE) {
+  if (args[0] == SYS_PRACTICE || args[0] == SYS_COMPUTE_E || args[0] == SYS_WRITE ||
+      args[0] == SYS_HALT     || args[0] == SYS_EXEC      || args[0] == SYS_EXIT  ||
+      args[0] == SYS_WAIT) {
       validate_args(f, args, h.arity);
       h.fn(f, args);
       return;
