@@ -414,13 +414,13 @@ static void syscall_handler(struct intr_frame* f) {
 void syscall_init(void) {
   lock_init(&filesys_lock);
   intr_register_int(0x30, 3, INTR_ON, syscall_handler, "syscall");
-  handler_table[SYS_PRACTICE] = makeHandler(handle_practice, 1);
-  handler_table[SYS_COMPUTE_E] = makeHandler(handle_compute_e, 1);
-  handler_table[SYS_WRITE] = makeHandler(handle_write, 3);
-  handler_table[SYS_HALT] = makeHandler(handle_halt, 0);
-  handler_table[SYS_EXIT] = makeHandler(f_handle_exit, 1);
-  handler_table[SYS_EXEC] = makeHandler(handle_exec, 1);
-  handler_table[SYS_WAIT] = makeHandler(handle_wait, 1);
+  HREGISTER(SYS_PRACTICE, handle_practice, 1);
+  HREGISTER(SYS_COMPUTE_E, handle_compute_e, 1);
+  HREGISTER(SYS_WRITE, handle_write, 3);
+  HREGISTER(SYS_HALT, handle_halt, 0);
+  HREGISTER(SYS_EXIT, f_handle_exit, 1);
+  HREGISTER(SYS_EXEC, handle_exec, 1);
+  HREGISTER(SYS_WAIT, handle_wait, 1);
   /* handler_table[SYS_CREATE] = makeHandler(handle_create, 2); */
   HREGISTER(SYS_CREATE, handle_create, 2);
 }
