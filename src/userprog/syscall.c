@@ -31,30 +31,6 @@ handler_t makeHandler(void (*fn)(struct intr_frame*, unsigned*), int arity) {
     return h;
 }
 
-void syscall_init(void) {
-  lock_init(&filesys_lock);
-  intr_register_int(0x30, 3, INTR_ON, syscall_handler, "syscall");
-  /* handler h = { &handle_practice, 1 }; */
-  /* handler *hp = malloc(sizeof(handler)); */
-  /* hp->arity = 1; */
-  /* hp->fn = &handle_practice; */
-  /* handler_table[SYS_PRACTICE] = &h; */
-  handler_table[SYS_PRACTICE] = makeHandler(handle_practice, 1);
-  /* handler h = { &handle_compute_e, 1 }; */
-  /* hp = malloc(sizeof(handler)); */
-  /* hp->arity = 1; */
-  /* hp->fn = &handle_compute_e; */
-  /* handler_table[SYS_COMPUTE_E] = h; */
-  handler_table[SYS_COMPUTE_E] = makeHandler(handle_compute_e, 1);
-  /* handler h = { &handle_write, 3 }; */
-  /* handler_table[SYS_WRITE] = (handler*){ &handle_write, 3 }; */
-  /* hp = malloc(sizeof(handler)); */
-  /* hp->arity = 3; */
-  /* hp->fn = &handle_write; */
-  /* handler_table[SYS_WRITE] = &h; */
-  handler_table[SYS_WRITE] = makeHandler(handle_write, 3);
-}
-
 void close_all_files(void) {
   struct list* fd_table = thread_current()->pcb->open_files;
   if (fd_table == NULL) {
@@ -88,6 +64,12 @@ void clear_cmdline(void) {
 
 static void handle_practice(struct intr_frame* f, unsigned* argv) {
     f->eax = (int)argv[1] + 1;
+}
+
+void f_handle_exit(struct intr_frame* f, unsigned* argv) {
+    int status = argv[1];
+    f->eax = status;
+    handle_exit(status);
 }
 
 void handle_exit(int status) {
@@ -130,7 +112,7 @@ done:
   process_exit();
 }
 
-static int handle_exec(const char *cmd_line) {
+static void handle_exec(struct intr_frame* f, unsigned* argv) {
   // Initialize the share wait status struct
   struct wait_status *ws = (struct wait_status*)malloc(sizeof(struct wait_status));
   sema_init(&ws->sema_load, 0);
@@ -138,13 +120,14 @@ static int handle_exec(const char *cmd_line) {
   lock_init(&ws->lock);
   ws->loaded = false;
   ws->ref_cnt = 2;
-  
+
+  const char *cmd_line = (char*)argv[1];
   pid_t pid = process_execute(cmd_line, ws);
   // Wait for the child process to finish loading
   sema_down(&ws->sema_load); // Child calls sema_up in start_process
   if (pid == TID_ERROR || !ws->loaded) {
     free(ws);
-    return -1;
+    f->eax = -1;
   } else {
     // Add the child to the list of active children
     struct list_elem *e = (struct list_elem*)malloc(sizeof(struct list_elem));
@@ -152,8 +135,8 @@ static int handle_exec(const char *cmd_line) {
     ws->loaded = true;
     ws->pid = pid;
     list_push_back(thread_current()->pcb->waits, &ws->elem);
-    
-    return pid;
+
+    f->eax = pid;
   }
 }
 
@@ -236,9 +219,10 @@ static int handle_read(int fd, void* buffer, unsigned size) {
   return -1;
 }
 
-static int handle_wait(pid_t pid) {
+static void handle_wait(struct intr_frame* f, unsigned* argv) {
+  pid_t pid = argv[1];
   int status = process_wait(pid);
-  return status;
+  f->eax = status;
 }
 
 static bool handle_create(char* file, unsigned size) {
@@ -305,6 +289,10 @@ static unsigned handle_tell(int fd) {
 
 static void handle_compute_e(struct intr_frame* f, unsigned* argv) {
     f->eax = sys_sum_to_e((int)argv[1]);
+}
+
+static void handle_halt(struct intr_frame* f UNUSED, unsigned* argv UNUSED) {
+    shutdown_power_off();
 }
 
 /* Validate ARGS by ensuring each address points to valid memory.
@@ -383,22 +371,6 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
   }
 
   switch (args[0]) {
-    case SYS_HALT:
-      shutdown_power_off();
-      break;
-    case SYS_EXIT:
-      validate_args(f, args, 1);
-      f->eax = args[1];
-      handle_exit(args[1]);
-      break;
-    case SYS_EXEC:
-      validate_args(f, args, 1);
-      f->eax = handle_exec((char*)args[1]);
-      break;
-    case SYS_WAIT:
-      validate_args(f, args, 1);
-      f->eax = handle_wait((pid_t)args[1]);
-      break;
     case SYS_CREATE:
       validate_args(f, args, 2);
       f->eax = handle_create((char*)args[1], (unsigned)args[2]);
@@ -432,4 +404,16 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       handle_close((int)args[1]);
       break;
   }
+}
+
+void syscall_init(void) {
+  lock_init(&filesys_lock);
+  intr_register_int(0x30, 3, INTR_ON, syscall_handler, "syscall");
+  handler_table[SYS_PRACTICE] = makeHandler(handle_practice, 1);
+  handler_table[SYS_COMPUTE_E] = makeHandler(handle_compute_e, 1);
+  handler_table[SYS_WRITE] = makeHandler(handle_write, 3);
+  handler_table[SYS_HALT] = makeHandler(handle_halt, 0);
+  handler_table[SYS_EXIT] = makeHandler(f_handle_exit, 1);
+  handler_table[SYS_EXEC] = makeHandler(handle_exec, 1);
+  handler_table[SYS_WAIT] = makeHandler(handle_wait, 1);
 }
