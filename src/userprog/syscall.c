@@ -26,6 +26,11 @@ struct lock filesys_lock;
 
 handler_t handler_table[SYS_LAST - SYS_FIRST + 1];
 
+#define HREGISTER(sys_code, name, arity) handler_table[sys_code] = makeHandler(name, arity);
+
+#define DEFINE_HANDLER(name) void name(struct intr_frame* f, unsigned* argv)
+
+
 handler_t makeHandler(void (*fn)(struct intr_frame*, unsigned*), int arity) {
     handler_t h = {fn, arity};
     return h;
@@ -225,15 +230,15 @@ static void handle_wait(struct intr_frame* f, unsigned* argv) {
   f->eax = status;
 }
 
-static void handle_create(struct intr_frame*f, unsigned* argv) {
+DEFINE_HANDLER(handle_create) {
   char* file = (char*)argv[1];
   unsigned size = (unsigned)argv[2];
   lock_acquire(&filesys_lock);
   bool success = filesys_create(file, size);
   lock_release(&filesys_lock);
-  f->eax = success; 
+  f->eax = success;
 }
-
+    
 static bool handle_remove(char* file) {
   lock_acquire(&filesys_lock);
   bool success = filesys_remove(file);
@@ -416,5 +421,6 @@ void syscall_init(void) {
   handler_table[SYS_EXIT] = makeHandler(f_handle_exit, 1);
   handler_table[SYS_EXEC] = makeHandler(handle_exec, 1);
   handler_table[SYS_WAIT] = makeHandler(handle_wait, 1);
-  handler_table[SYS_CREATE] = makeHandler(handle_create, 2);
+  /* handler_table[SYS_CREATE] = makeHandler(handle_create, 2); */
+  HREGISTER(SYS_CREATE, handle_create, 2);
 }
