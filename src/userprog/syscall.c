@@ -24,27 +24,35 @@ static void handle_write(struct intr_frame* f, unsigned* args);
 
 struct lock filesys_lock;
 
-handler* handler_table[SYS_LAST - SYS_FIRST + 1];
+handler_t handler_table[SYS_LAST - SYS_FIRST + 1];
+
+handler_t makeHandler(void (*fn)(struct intr_frame*, unsigned*), int arity) {
+    handler_t h = {fn, arity};
+    return h;
+}
 
 void syscall_init(void) {
   lock_init(&filesys_lock);
   intr_register_int(0x30, 3, INTR_ON, syscall_handler, "syscall");
+  /* handler h = { &handle_practice, 1 }; */
   /* handler *hp = malloc(sizeof(handler)); */
-  handler h = { &handle_practice, 1 };
   /* hp->arity = 1; */
   /* hp->fn = &handle_practice; */
-  handler_table[SYS_PRACTICE] = &h;
-  handler h = { &handle_compute_e, 1 };
+  /* handler_table[SYS_PRACTICE] = &h; */
+  handler_table[SYS_PRACTICE] = makeHandler(handle_practice, 1);
+  /* handler h = { &handle_compute_e, 1 }; */
   /* hp = malloc(sizeof(handler)); */
   /* hp->arity = 1; */
   /* hp->fn = &handle_compute_e; */
-  handler_table[SYS_COMPUTE_E] = h;
-  handler h = { &handle_write, 3 };
+  /* handler_table[SYS_COMPUTE_E] = h; */
+  handler_table[SYS_COMPUTE_E] = makeHandler(handle_compute_e, 1);
+  /* handler h = { &handle_write, 3 }; */
   /* handler_table[SYS_WRITE] = (handler*){ &handle_write, 3 }; */
   /* hp = malloc(sizeof(handler)); */
   /* hp->arity = 3; */
   /* hp->fn = &handle_write; */
-  handler_table[SYS_WRITE] = &h;
+  /* handler_table[SYS_WRITE] = &h; */
+  handler_table[SYS_WRITE] = makeHandler(handle_write, 3);
 }
 
 void close_all_files(void) {
@@ -123,7 +131,6 @@ done:
 }
 
 static int handle_exec(const char *cmd_line) {
-  
   // Initialize the share wait status struct
   struct wait_status *ws = (struct wait_status*)malloc(sizeof(struct wait_status));
   sema_init(&ws->sema_load, 0);
@@ -368,10 +375,10 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
     handle_exit(-1);
   }
 
-  handler* h = handler_table[args[0]];
+  handler_t h = handler_table[args[0]];
   if (args[0] == SYS_PRACTICE || args[0] == SYS_COMPUTE_E || args[0] == SYS_WRITE) {
-      validate_args(f, args, h->arity);
-      h->fn(f, args);
+      validate_args(f, args, h.arity);
+      h.fn(f, args);
       return;
   }
 

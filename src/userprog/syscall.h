@@ -9,6 +9,8 @@ void handle_exit(int status);
 typedef struct handler {
     void (*fn)(struct intr_frame*, unsigned*);
     int arity;
-} handler;
+} handler_t;
+
+handler_t makeHandler(void (*)(struct intr_frame*, unsigned*), int);
 
 #endif /* userprog/syscall.h */
