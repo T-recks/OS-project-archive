@@ -346,7 +346,7 @@ static void validate_args(struct intr_frame* f, uint32_t* args, int n) {
   }
 }
 
-static void syscall_handler(struct intr_frame* f UNUSED) {
+static void syscall_handler(struct intr_frame* f) {
   uint32_t* args = ((uint32_t*)f->esp);
 
   /*
@@ -373,10 +373,7 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
   }
 
   switch (args[0]) {
-    case SYS_CREATE:
-      validate_args(f, args, 2);
-      f->eax = handle_create((char*)args[1], (unsigned)args[2]);
-      break;
+
     case SYS_REMOVE:
       validate_args(f, args, 1);
       f->eax = handle_remove((char*)args[1]);
