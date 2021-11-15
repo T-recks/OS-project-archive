@@ -24,18 +24,6 @@ static void handle_write(struct intr_frame* f, unsigned* args);
 
 struct lock filesys_lock;
 
-handler_t handler_table[SYS_LAST - SYS_FIRST + 1];
-
-#define HREGISTER(sys_code, name, arity) handler_table[sys_code] = makeHandler(name, arity);
-
-#define DEFINE_HANDLER(name) void name(struct intr_frame* f, unsigned* argv)
-
-
-handler_t makeHandler(void (*fn)(struct intr_frame*, unsigned*), int arity) {
-    handler_t h = {fn, arity};
-    return h;
-}
-
 void close_all_files(void) {
   struct list* fd_table = thread_current()->pcb->open_files;
   if (fd_table == NULL) {
@@ -421,6 +409,5 @@ void syscall_init(void) {
   HREGISTER(SYS_EXIT, f_handle_exit, 1);
   HREGISTER(SYS_EXEC, handle_exec, 1);
   HREGISTER(SYS_WAIT, handle_wait, 1);
-  /* handler_table[SYS_CREATE] = makeHandler(handle_create, 2); */
   HREGISTER(SYS_CREATE, handle_create, 2);
 }
