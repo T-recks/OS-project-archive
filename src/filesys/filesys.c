@@ -85,3 +85,21 @@ static void do_format(void) {
   free_map_close();
   printf("done.\n");
 }
+
+struct dir* traverse(struct inode inode, char* path, dir* parent, char name[MAX_NAME+1]) {
+    struct dir *d = malloc(sizeof(struct dir));
+    struct inode *next_inode = malloc(sizeof(struct inode));
+    char next_part[MAX_NAME+1];
+    bool success;
+    
+    d->inode = inode;
+    d->pos = 0;
+    
+
+    while (success = dir_lookup(d, next_part, &next_inode)) {
+        get_next_part(next_part, &name);
+        parent = d;
+        d->inode = next_inode;
+        d->pos = 0;
+    }
+}
