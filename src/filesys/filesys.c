@@ -6,8 +6,8 @@
 #include "filesys/free-map.h"
 #include "filesys/inode.h"
 #include "filesys/directory.h"
-#include "filesys/directory.c"
-#include "filesys/inode.c"
+//#include "filesys/directory.c"
+//#include "filesys/inode.c"
 
 /* Partition that contains the file system. */
 struct block* fs_device;
