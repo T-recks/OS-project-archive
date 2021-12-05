@@ -5,7 +5,25 @@
 #include "filesys/off_t.h"
 #include "devices/block.h"
 
+#define BUFFER_LEN 64
+
 struct bitmap;
+
+typedef struct file_cache_block {
+  block_sector_t sector;     // disk sector address cached by this block, 512B
+  void* contents;     // contents at this sector (BLOCK_SECTOR_SIZE bytes)
+  bool dirty;                // tracks whether a write-back is required
+  bool in_use;               // track if block has been used since last considered for replacement
+  bool evicting;             // track if block is being evicted
+  bool free;                 // if this block is empty
+  struct rw_lock* write_lock; // prevents any other threads from accessing while one is writing
+} file_cache_block_t;
+
+typedef struct file_buffer {
+  file_cache_block_t buffer[BUFFER_LEN]; // buffer cache representation
+  uint8_t clock_hand;            // where the clock hand currently points to
+  struct lock* replacement_lock;  // prevents race conditions when cache replacement is needed
+} file_buffer_t;
 
 void inode_init(void);
 bool inode_create(block_sector_t, off_t);
@@ -19,5 +37,10 @@ off_t inode_write_at(struct inode*, const void*, off_t size, off_t offset);
 void inode_deny_write(struct inode*);
 void inode_allow_write(struct inode*);
 off_t inode_length(const struct inode*);
+
+void cache_init();
+void cleanup_cache();
+void cache_read(block_sector_t sector, void* buffer);
+void cache_write(block_sector_t sector, const void* buffer);
 
 #endif /* filesys/inode.h */
