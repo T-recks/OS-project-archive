@@ -23,6 +23,7 @@ struct inode_disk {
 file_buffer_t* f_buffer;
 
 bool clock_algorithm(block_sector_t sector_addr, file_cache_block_t** block);
+void advance_hand(void);
 
 /* Returns the number of sectors to allocate for an inode SIZE
    bytes long. */
@@ -293,7 +294,6 @@ off_t inode_length(const struct inode* inode) { return inode->data.length; }
 
 void cache_init() {
   
-  printf("CACHE_INIT\n");
   f_buffer = (file_buffer_t*)malloc(sizeof(file_buffer_t));
 
   f_buffer->clock_hand = 0;
@@ -301,16 +301,16 @@ void cache_init() {
   lock_init(f_buffer->replacement_lock);
 
   for (int i = 0; i < BUFFER_LEN; i++) {
-    file_cache_block_t entry = f_buffer->buffer[i];
+    file_cache_block_t* entry = &f_buffer->buffer[i];
 
-    entry.sector = 0;
-    entry.contents = malloc(BLOCK_SECTOR_SIZE);
-    entry.dirty = false;
-    entry.in_use = false;
-    entry.evicting = false;
-    entry.free = true;
-    entry.write_lock = (struct rw_lock*)malloc(sizeof(struct rw_lock));
-    rw_lock_init(entry.write_lock);
+    entry->sector = 0;
+    entry->contents = malloc(BLOCK_SECTOR_SIZE);
+    entry->dirty = false;
+    entry->in_use = false;
+    entry->evicting = false;
+    entry->free = true;
+    entry->write_lock = (struct rw_lock*)malloc(sizeof(struct rw_lock));
+    rw_lock_init(entry->write_lock);
   }
 }
 
@@ -361,22 +361,21 @@ void cache_write(block_sector_t sector, const void* buffer) {
 }
 
 bool clock_algorithm(block_sector_t sector_addr, file_cache_block_t** block) {
-  file_cache_block_t entry;
-  printf("CLOCK\n");
+  file_cache_block_t* entry;
 
   // - acquire `replacement_lock`
   lock_acquire(f_buffer->replacement_lock);
 
   // - If `sector_addr` in `file_buffer` and not `evicting`:
   for (int i = 0; i < BUFFER_LEN; i++) {
-    entry = f_buffer->buffer[i];
-    if (sector_addr == entry.sector) {
+    entry = &f_buffer->buffer[i];
+    if (sector_addr == entry->sector) {
       //     - set appropriate `file_cache_block→in_use` to true
       //     - *block = &file_cache_block
       //     - release `replacement_lock`
       //     - Return `true`
-      entry.in_use = true;
-      *block = &entry;
+      entry->in_use = true;
+      *block = entry;
       lock_release(f_buffer->replacement_lock);
       return true;
     }
@@ -386,47 +385,47 @@ bool clock_algorithm(block_sector_t sector_addr, file_cache_block_t** block) {
 
   //     - `advance_hand`
   advance_hand();
-  entry = f_buffer->buffer[f_buffer->clock_hand];
+  entry = &f_buffer->buffer[f_buffer->clock_hand];
 
   //     - While `in_use` and not `free` and not `active` or `evicting`:
-  while (entry.in_use && !entry.free && !entry.evicting) {
+  while (entry->in_use && !entry->free && !entry->evicting) {
     //         - set `in_use` to 0 and advance_hand
-    entry.in_use = false;
+    entry->in_use = false;
     advance_hand();
-    entry = f_buffer->buffer[f_buffer->clock_hand];
+    entry = &f_buffer->buffer[f_buffer->clock_hand];
   }
 
   //     - set `file_cache_block→sector` to `sector_addr`
-  entry.sector = sector_addr;
+  entry->sector = sector_addr;
 
   //     - If not `free`: evict the page
-  if (!entry.free) {
+  if (!entry->free) {
     //         - rw_lock_acquire(file_cache_block→write_lock, false)`
-    rw_lock_acquire(entry.write_lock, false);
+    rw_lock_acquire(entry->write_lock, false);
 
-    entry.evicting = true;
+    entry->evicting = true;
     //         - release `replacement_lock`
     lock_release(f_buffer->replacement_lock);
 
     //         - write back to disk if `dirty` via `block_write`.
-    block_write(fs_device, entry.sector, entry.contents);
-    entry.dirty = false;
+    block_write(fs_device, entry->sector, entry->contents);
+    entry->dirty = false;
 
     //         - acquire `replacement_lock`
     lock_acquire(f_buffer->replacement_lock);
 
-    entry.evicting = false;
+    entry->evicting = false;
 
     //         - `rw_lock_``releas``e``(file_cache_block→write_lock, false)`
-    rw_lock_release(entry.write_lock, false);
+    rw_lock_release(entry->write_lock, false);
   }
 
   //     - set `free` to 0, `in_use` to 1
-  entry.free = false;
-  entry.in_use = true;
+  entry->free = false;
+  entry->in_use = true;
 
   //     - *block = &file_cache_block
-  *block = &entry;
+  *block = entry;
 
   //     - release `replacement_lock`
   lock_release(f_buffer->replacement_lock);

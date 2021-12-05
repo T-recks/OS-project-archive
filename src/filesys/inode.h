@@ -38,8 +38,8 @@ void inode_deny_write(struct inode*);
 void inode_allow_write(struct inode*);
 off_t inode_length(const struct inode*);
 
-void cache_init();
-void cleanup_cache();
+void cache_init(void);
+void cleanup_cache(void);
 void cache_read(block_sector_t sector, void* buffer);
 void cache_write(block_sector_t sector, const void* buffer);
 
