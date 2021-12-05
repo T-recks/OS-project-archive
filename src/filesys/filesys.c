@@ -6,6 +6,8 @@
 #include "filesys/free-map.h"
 #include "filesys/inode.h"
 #include "filesys/directory.h"
+#include "filesys/directory.c"
+#include "filesys/inode.c"
 
 /* Partition that contains the file system. */
 struct block* fs_device;
@@ -84,4 +86,28 @@ static void do_format(void) {
     PANIC("root directory creation failed");
   free_map_close();
   printf("done.\n");
+}
+
+struct dir* traverse(struct inode inode, char* path, struct dir* parent, char name[NAME_MAX+1]) {
+    struct dir *d = malloc(sizeof(struct dir));
+    struct inode *next_inode = malloc(sizeof(struct inode));
+    char next_part[NAME_MAX+1];
+    bool success;
+    
+    d->inode = &inode;
+    d->pos = 0;
+    
+    get_next_part(next_part, &path);
+    while ((success = dir_lookup(d, next_part, &next_inode))) {
+        get_next_part(next_part, &path);
+        parent = d;
+        d->inode = next_inode;
+        d->pos = 0;
+    }
+
+    if (success) {
+        return d;
+    } else {
+        return -1;
+    }
 }
