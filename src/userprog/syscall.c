@@ -333,7 +333,20 @@ static bool handle_mkdir(const char* dir) {
   return true;
 }
 
-static bool handle_readdir(int fd, char* name) { return false; }
+static bool handle_readdir(int fd, char* name) {
+  struct list* dirs = &(thread_current()->pcb->active_dirs);
+
+  for (struct list_elem* e = list_begin(dirs); e != list_end(dirs); e = list_next(e)) {
+    struct dir_data* d = list_entry(e, struct dir_data, elem);
+    if (fd == d->fd) {
+        struct dir* dir = dir_open(d->dir->inode);
+        bool success = dir_readdir(dir, name);
+        return success;
+    }
+  }
+
+  return false;
+}
 
 static bool handle_isdir(int fd) { return false; }
 
