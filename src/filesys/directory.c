@@ -98,6 +98,7 @@ bool dir_lookup(const struct dir* dir, const char* name, struct inode** inode) {
   ASSERT(dir != NULL);
   ASSERT(name != NULL);
 
+  // TODO: this lookup returning bad e
   if (lookup(dir, name, &e, NULL))
     *inode = inode_open(e.inode_sector);
   else

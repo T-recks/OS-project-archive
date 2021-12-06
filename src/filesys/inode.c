@@ -3,6 +3,7 @@
 #include <debug.h>
 #include <round.h>
 #include <string.h>
+#include <stdio.h>
 #include "filesys/filesys.h"
 #include "filesys/free-map.h"
 #include "threads/malloc.h"
@@ -296,6 +297,7 @@ void inode_allow_write(struct inode* inode) {
 off_t inode_length(const struct inode* inode) { return inode->data.length; }
 
 void cache_init() {
+  printf("\nCACHE INIT\n");
 
   f_buffer = (file_buffer_t*)malloc(sizeof(file_buffer_t));
 
@@ -318,6 +320,8 @@ void cache_init() {
 }
 
 void cleanup_cache() {
+
+  printf("\nCACHE CLOSE\n");
   for (int i = 0; i < BUFFER_LEN; i++) {
     file_cache_block_t entry = f_buffer->buffer[i];
     if (entry.dirty && !entry.free) {
@@ -332,6 +336,8 @@ void cleanup_cache() {
 
 void cache_read(block_sector_t sector, void* buffer) {
   file_cache_block_t* block;
+
+  printf("\nCACHE READ\n");
 
   if (!clock_algorithm(sector, &block)) {
     // cache miss
@@ -348,6 +354,8 @@ void cache_read(block_sector_t sector, void* buffer) {
 
 void cache_write(block_sector_t sector, const void* buffer) {
   file_cache_block_t* block;
+
+  printf("\nCACHE WRITE\n");
 
   if (!clock_algorithm(sector, &block)) {
     // cache miss
@@ -380,11 +388,14 @@ bool clock_algorithm(block_sector_t sector_addr, file_cache_block_t** block) {
       entry->in_use = true;
       *block = entry;
       lock_release(f_buffer->replacement_lock);
+
+      printf("\nCACHE HIT AT: %d\n", i);
       return true;
     }
   }
 
   // - Else:
+  printf("\nCACHE MISS\n");
 
   //     - `advance_hand`
   advance_hand();
@@ -400,6 +411,7 @@ bool clock_algorithm(block_sector_t sector_addr, file_cache_block_t** block) {
 
   //     - set `file_cache_block→sector` to `sector_addr`
   entry->sector = sector_addr;
+  printf("\nCACHE ALLOCATE: %d FOR %d\n", f_buffer->clock_hand, sector_addr);
 
   //     - If not `free`: evict the page
   if (!entry->free) {
