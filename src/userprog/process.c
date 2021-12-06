@@ -13,6 +13,7 @@
 #include "filesys/directory.h"
 #include "filesys/file.h"
 #include "filesys/filesys.h"
+#include "filesys/inode.h"
 #include "threads/flags.h"
 #include "threads/init.h"
 #include "threads/interrupt.h"
@@ -134,7 +135,7 @@ static void start_process(void* file_name_) {
   t->pcb->ws->loaded = true;
   sema_up(&t->pcb->ws->sema_load);
 
-  /* fpu init */  
+  /* fpu init */
   asm volatile("fninit; fsave (%0)" : : "g"(&if_.FPU) : "memory");
 
   /* Start the user process by simulating a return from an
@@ -340,6 +341,10 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
   if (t->pcb->open_files == NULL)
     handle_exit(-1);
   list_init(t->pcb->open_files);
+
+  // Set the CWD to the root directory
+  // TODO: if a child process, make the CWD the parent's CWD
+  t->pcb->cwd = dir_open(inode_open(ROOT_DIR_SECTOR));
 
   // add each arg to the argv list & increment argc
   char *token, *save_ptr;

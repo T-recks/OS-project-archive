@@ -11,13 +11,14 @@
 /* Identifies an inode. */
 #define INODE_MAGIC 0x494e4f44
 
-#define NUM_DIR_PTR 124
+#define NUM_DIR_PTR 123
 
 /* On-disk inode.
    Must be exactly BLOCK_SECTOR_SIZE bytes long. */
 struct inode_disk {
   off_t length;   /* File size in bytes. */
   unsigned magic; /* Magic number. */
+  bool isdir;     /* True if a directory, otherwise it's a file */
   block_sector_t direct_ptr[NUM_DIR_PTR];
   block_sector_t ind_ptr;     /* points to 128 data blocks */
   block_sector_t dbl_ind_ptr; /* points to 16384 data blocks */
