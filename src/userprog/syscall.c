@@ -277,7 +277,12 @@ static unsigned handle_tell(int fd) {
 
 static int handle_compute_e(int n) { return sys_sum_to_e(n); }
 
-static bool handle_chdir(const char* dir) { return false; }
+static bool handle_chdir(const char* path) {
+  struct process* pcb = thread_current()->pcb;
+  strlcpy(pcb->cwd_name, path, MAX_DIR_LEN);
+  // TODO: traverse the path to change pcb->cwd
+  return false;
+}
 
 static bool handle_mkdir(const char* dir) {
   struct dir* parent = thread_current()->pcb->cwd;
@@ -332,7 +337,20 @@ static bool handle_mkdir(const char* dir) {
   return true;
 }
 
-static bool handle_readdir(int fd, char* name) { return false; }
+static bool handle_readdir(int fd, char* name) {
+  struct list* dirs = &(thread_current()->pcb->active_dirs);
+
+  for (struct list_elem* e = list_begin(dirs); e != list_end(dirs); e = list_next(e)) {
+    struct dir_data* d = list_entry(e, struct dir_data, elem);
+    if (fd == d->fd) {
+      struct dir* dir = dir_open(d->dir->inode);
+      bool success = dir_readdir(dir, name);
+      return success;
+    }
+  }
+
+  return false;
+}
 
 static bool handle_isdir(int fd) { return false; }
 
@@ -475,18 +493,23 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       f->eax = handle_compute_e(args[1]);
       break;
     case SYS_CHDIR:
+      //TODO: validate
       f->eax = handle_chdir((char*)args[1]);
       break;
     case SYS_MKDIR:
+      //TODO: validate
       f->eax = handle_mkdir((char*)args[1]);
       break;
     case SYS_READDIR:
+      //TODO: validate
       f->eax = handle_readdir((int)args[1], (char*)args[2]);
       break;
     case SYS_ISDIR:
+      //TODO: validate
       f->eax = handle_isdir((int)args[1]);
       break;
     case SYS_INUMBER:
+      //TODO: validate
       f->eax = handle_inumber((int)args[1]);
       break;
   }

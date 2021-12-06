@@ -8,6 +8,7 @@
 // These defines will be used in Project 2: Multithreading
 #define MAX_STACK_PAGES (1 << 11)
 #define MAX_THREADS 127
+#define MAX_DIR_LEN 128
 
 /* PIDs and TIDs are the same type. PID should be
    the TID of the main thread of the process */
@@ -16,6 +17,13 @@ typedef tid_t pid_t;
 /* Thread functions (Project 2: Multithreading) */
 typedef void (*pthread_fun)(void*);
 typedef void (*stub_fun)(pthread_fun, void*);
+
+struct dir_data {
+  struct dir* dir; /* Directory pointer */
+  char* name;
+  int fd; /* File descriptor of this directory */
+  struct list_elem elem;
+};
 
 /* The process control block for a given process. Since
    there can be multiple threads per process, we need a separate
@@ -31,7 +39,10 @@ struct process {
   struct wait_status* ws;  /* Wait status struct of the parent */
   struct list* waits;      /* List of children this process' children */
   struct list* open_files; /* All files opened by this process */
-  struct dir* cwd;         /* Process' current working directory */
+  struct dir* cwd;
+  char* cwd_name;
+  struct dir* cwd_parent;
+  struct list active_dirs;
 };
 
 /*
