@@ -15,6 +15,7 @@
 #include "filesys/filesys.h"
 #include "filesys/directory.h"
 #include "filesys/inode.h"
+#include "filesys/free-map.h"
 
 static void syscall_handler(struct intr_frame*);
 static bool handle_close(const int fd);
@@ -276,11 +277,13 @@ static unsigned handle_tell(int fd) {
 
 static int handle_compute_e(int n) { return sys_sum_to_e(n); }
 
+static bool handle_chdir(const char* dir) { return false; }
+
 static bool handle_mkdir(const char* dir) {
   struct dir* parent = thread_current()->pcb->cwd;
-  struct dir_entry* parent_entry;
-  char name[NAME_MAX + 1];
   bool success;
+  char name[NAME_MAX + 1];
+  strlcpy(name, dir, strlen(dir) + 1);
   if (is_absolute(dir)) {
     // Traverse the directory tree from the root
     traverse(inode_open(ROOT_DIR_SECTOR), dir, &parent, name);
@@ -289,20 +292,23 @@ static bool handle_mkdir(const char* dir) {
     traverse(dir_get_inode(parent), dir, &parent, NULL);
   }
 
-  // Get the parent's directory entry
-  if (parent != NULL) {
-    // TODO: Read from the next directory up
-    success = inode_read_at(dir_get_inode(parent), parent_entry, sizeof parent_entry, 0);
-  } else {
-    // TODO: how to get the root directory entry?
-    success = inode_read_at(dir_get_inode(parent), parent_entry, sizeof parent_entry, 0);
-  }
+  //  if (parent != thread_current()->pcb->cwd) {
+  //    // Read from the next directory up
+  //    struct inode* parent_inode;
+  //    success = dir_lookup(parent, ".", &parent_inode);
+  //    parent_sector = inode_get_inumber(parent_inode);
+  //  } else {
+  //    // Read from the root directory
+  //    parent_sector = ROOT_DIR_SECTOR;
+  //  }
 
   // Create the new directory in the parent directory
   struct inode* new_inode;
-  success = dir_create(dir_get_sector(parent_entry), 16);
-  success = dir_lookup(parent, name, &new_inode);
-  success = dir_add(parent, name, inode_get_inumber(new_inode));
+  block_sector_t new_sector;
+  success = free_map_allocate(1, &new_sector);    // Allocate the new sector
+  success = dir_create(new_sector, 16);           // Create the new directory
+  success = dir_add(parent, name, new_sector);    // Add directory to parent
+  success = dir_lookup(parent, name, &new_inode); // Get the new inode
   if (!success) {
     // TODO: might need to do some cleanup before returning
     return false;
@@ -467,6 +473,9 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
     case SYS_COMPUTE_E:
       //TODO: Validate
       f->eax = handle_compute_e(args[1]);
+      break;
+    case SYS_CHDIR:
+      f->eax = handle_chdir((char*)args[1]);
       break;
     case SYS_MKDIR:
       f->eax = handle_mkdir((char*)args[1]);
