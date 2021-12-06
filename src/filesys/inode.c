@@ -121,7 +121,8 @@ struct inode* inode_open(block_sector_t sector) {
   inode->open_cnt = 1;
   inode->deny_write_cnt = 0;
   inode->removed = false;
-  block_read(fs_device, inode->sector, &inode->data);
+  cache_read(inode->sector, &inode->data);
+  // block_read(fs_device, inode->sector, &inode->data);
   return inode;
 }
 
@@ -351,13 +352,13 @@ void cache_write(block_sector_t sector, const void* buffer) {
     block_read(fs_device, sector, block->contents);
   }
 
-  rw_lock_acquire(block->write_lock, true);
+  rw_lock_acquire(block->write_lock, false);
 
   memcpy(block->contents, buffer, BLOCK_SECTOR_SIZE);
 
   block->dirty = true;
 
-  rw_lock_release(block->write_lock, true);
+  rw_lock_release(block->write_lock, false);
 }
 
 bool clock_algorithm(block_sector_t sector_addr, file_cache_block_t** block) {
