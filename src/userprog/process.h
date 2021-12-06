@@ -17,6 +17,14 @@ typedef tid_t pid_t;
 typedef void (*pthread_fun)(void*);
 typedef void (*stub_fun)(pthread_fun, void*);
 
+
+struct dir_data {
+  struct dir* dir; /* Directory pointer */
+  char* name;
+  int fd;          /* File descriptor of this directory */
+  struct list_elem elem;
+};
+
 /* The process control block for a given process. Since
    there can be multiple threads per process, we need a separate
    PCB from the TCB. All TCBs in a process will have a pointer
@@ -31,6 +39,9 @@ struct process {
   struct wait_status *ws;     /* Wait status struct of the parent */
   struct list* waits;         /* List of children this process' children */
   struct list* open_files;    /* All files opened by this process */
+  struct dir_data *cwd;
+  struct dir *cwd_parent;
+  struct list active_dirs;
 };
 
 /*
