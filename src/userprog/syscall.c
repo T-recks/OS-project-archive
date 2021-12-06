@@ -290,9 +290,9 @@ static bool handle_mkdir(const char* dir) {
   }
 
   // Get the parent's directory entry
-  if (parent->parent != NULL) {
-    // Read from the next directory up
-    success = inode_read_at(dir_get_inode(parent->parent), parent_entry, sizeof parent_entry, 0);
+  if (parent != NULL) {
+    // TODO: Read from the next directory up
+    success = inode_read_at(dir_get_inode(parent), parent_entry, sizeof parent_entry, 0);
   } else {
     // TODO: how to get the root directory entry?
     success = inode_read_at(dir_get_inode(parent), parent_entry, sizeof parent_entry, 0);
