@@ -17,6 +17,8 @@ struct dir_entry {
   block_sector_t inode_sector; /* Sector number of header. */
   char name[NAME_MAX + 1];     /* Null terminated file name. */
   bool in_use;                 /* In use or free? */
+  struct dir_entry* loc;       /* Pointer to "." directory */
+  struct dir_entry* parent;    /* Pointer to ".." directory */
 };
 
 /* Creates a directory with space for ENTRY_CNT entries in the
@@ -64,6 +66,8 @@ void dir_close(struct dir* dir) {
 struct inode* dir_get_inode(struct dir* dir) {
   return dir->inode;
 }
+
+block_sector_t dir_get_sector(struct dir* dir) { return inode_get_inumber(dir->inode); }
 
 /* Searches DIR for a file with the given NAME.
    If successful, returns true, sets *EP to the directory entry
@@ -145,6 +149,12 @@ bool dir_add(struct dir* dir, const char* name, block_sector_t inode_sector) {
   e.inode_sector = inode_sector;
   success = inode_write_at(dir->inode, &e, sizeof e, ofs) == sizeof e;
 
+  // Initialize "." and ".." pointers
+  struct dir_entry parent;
+  inode_read_at(dir->inode, &parent, sizeof e, 0);
+  e.loc = &e;
+  e.parent = &parent;
+
 done:
   return success;
 }
@@ -198,4 +208,56 @@ bool dir_readdir(struct dir* dir, char name[NAME_MAX + 1]) {
     }
   }
   return false;
+}
+
+/* Extracts a file name part from *SRCP into PART, and updates *SRCP so that the
+next call will return the next file name part. Returns 1 if successful, 0 at
+end of string, -1 for a too-long file name part. */
+static int get_next_part(char part[NAME_MAX + 1], const char** srcp) {
+  const char* src = *srcp;
+  char* dst = part;
+  /* Skip leading slashes. If it's all slashes, we're done. */
+  while (*src == '/')
+    src++;
+  if (*src == '\0')
+    return 0;
+  /* Copy up to NAME_MAX character from SRC to DST. Add null terminator. */
+  while (*src != '/' && *src != '\0') {
+    if (dst < part + NAME_MAX)
+      *dst++ = *src;
+    else
+      return -1;
+    src++;
+  }
+  *dst = '\0';
+  /* Advance source pointer. */
+  *srcp = src;
+  return 1;
+}
+
+struct dir* traverse(struct inode* inode, const char* path, struct dir** parent,
+                     char name[NAME_MAX + 1]) {
+  struct dir* d = malloc(sizeof(struct dir));
+  struct inode* next_inode;
+  char next_part[NAME_MAX + 1];
+  bool success;
+
+  d->inode = inode;
+  d->pos = 0;
+
+  get_next_part(next_part, &path);
+  while ((success = dir_lookup(d, next_part, &next_inode))) {
+    get_next_part(next_part, &path);
+    strlcpy(name, next_part, strlen(next_part));
+    *parent = d;
+    d->inode = next_inode;
+    d->pos = 0;
+  }
+
+  return d;
+  //  if (success) {
+  //    return d;
+  //  } else {
+  //    return NULL;
+  //  }
 }
