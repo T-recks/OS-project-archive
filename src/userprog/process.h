@@ -41,7 +41,7 @@ struct process {
   struct list* waits;         /* List of children this process' children */
   struct list* open_files;    /* All files opened by this process */
   struct dir* cwd;
-  char cwd_name[MAX_DIR_LEN];
+  char* cwd_name;
   struct dir* cwd_parent;
   struct list active_dirs;
 };
