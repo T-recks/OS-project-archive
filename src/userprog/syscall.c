@@ -38,7 +38,11 @@ void close_all_files(void) {
   while (!list_empty(fd_table)) {
     struct list_elem* e = list_pop_front(fd_table);
     struct file_data* f = list_entry(e, struct file_data, elem);
-    file_close(f->file);
+    if (f->file != NULL) {
+      file_close(f->file);
+    } else {
+      dir_close(f->dir);
+    }
     f->ref_cnt--;
     if (f->ref_cnt == 0) {
       list_remove(e);
@@ -102,8 +106,6 @@ done:
   process_exit();
 }
 
-static bool is_absolute(const char* path) { return path[0] == '\\' || path[0] == '/'; }
-
 static int handle_exec(const char* cmd_line) {
 
   // Initialize the share wait status struct
@@ -136,6 +138,7 @@ static int handle_open(char* filename) {
   struct list* fd_table = thread_current()->pcb->open_files;
   lock_acquire(&filesys_lock);
   // call filesys_open, if get NULL then handle failed open
+  // TODO: files in different directories with different names
   struct file* new_file = filesys_open(filename);
   if (new_file == NULL) {
     lock_release(&filesys_lock);
@@ -217,6 +220,9 @@ static int handle_wait(pid_t pid) {
 }
 
 static bool handle_create(char* file, unsigned size) {
+  if (strlen(file) > NAME_MAX) {
+    return false;
+  }
   lock_acquire(&filesys_lock);
   bool success = filesys_create(file, size);
   lock_release(&filesys_lock);
@@ -279,33 +285,39 @@ static int handle_compute_e(int n) { return sys_sum_to_e(n); }
 
 static bool handle_chdir(const char* path) {
   struct process* pcb = thread_current()->pcb;
-  strlcpy(pcb->cwd_name, path, MAX_DIR_LEN);
-  // TODO: traverse the path to change pcb->cwd
-  return false;
+  struct dir* parent = pcb->cwd;
+  struct dir* new_cwd;
+
+  // traverse to find directory specified by path
+  if (is_absolute(path)) {
+    new_cwd = traverse(inode_open(ROOT_DIR_SECTOR), path, &parent, NULL);
+  } else {
+    // TODO: handle "../" relative paths
+    new_cwd = traverse(dir_get_inode(parent), path, &parent, NULL);
+  }
+
+  if (new_cwd != NULL) { // found target directory
+    strlcpy(pcb->cwd_name, path, MAX_DIR_LEN);
+    pcb->cwd = new_cwd;
+    pcb->cwd_parent = parent;
+    return true;
+  } else { // no such directory
+    return false;
+  }
 }
 
 static bool handle_mkdir(const char* dir) {
   struct dir* parent = thread_current()->pcb->cwd;
   bool success;
   char name[NAME_MAX + 1];
-  strlcpy(name, dir, strlen(dir) + 1);
+  //  strlcpy(name, dir, strlen(dir) + 1);
   if (is_absolute(dir)) {
     // Traverse the directory tree from the root
     traverse(inode_open(ROOT_DIR_SECTOR), dir, &parent, name);
   } else {
     // Traverse the directory tree from CWD
-    traverse(dir_get_inode(parent), dir, &parent, NULL);
+    traverse(dir_get_inode(parent), dir, &parent, name);
   }
-
-  //  if (parent != thread_current()->pcb->cwd) {
-  //    // Read from the next directory up
-  //    struct inode* parent_inode;
-  //    success = dir_lookup(parent, ".", &parent_inode);
-  //    parent_sector = inode_get_inumber(parent_inode);
-  //  } else {
-  //    // Read from the root directory
-  //    parent_sector = ROOT_DIR_SECTOR;
-  //  }
 
   // Create the new directory in the parent directory
   struct inode* new_inode;
@@ -324,7 +336,8 @@ static bool handle_mkdir(const char* dir) {
   struct list* fd_table = thread_current()->pcb->open_files;
   struct file_data* fd_entry = (struct file_data*)malloc(sizeof(struct file_data));
   fd_entry->dir = new_dir;
-  fd_entry->filename = name;
+  fd_entry->file = NULL;
+  fd_entry->filename = (char*)name;
   fd_entry->ref_cnt = 1;
   if (!list_empty(fd_table)) {
     struct list_elem* e = list_back(fd_table);
@@ -338,16 +351,16 @@ static bool handle_mkdir(const char* dir) {
 }
 
 static bool handle_readdir(int fd, char* name) {
-  struct list* dirs = &(thread_current()->pcb->active_dirs);
-
-  for (struct list_elem* e = list_begin(dirs); e != list_end(dirs); e = list_next(e)) {
-    struct dir_data* d = list_entry(e, struct dir_data, elem);
-    if (fd == d->fd) {
-      struct dir* dir = dir_open(d->dir->inode);
-      bool success = dir_readdir(dir, name);
-      return success;
-    }
-  }
+  //  struct list* dirs = &(thread_current()->pcb->active_dirs);
+  //
+  //  for (struct list_elem* e = list_begin(dirs); e != list_end(dirs); e = list_next(e)) {
+  //    struct dir_data* d = list_entry(e, struct dir_data, elem);
+  //    if (fd == d->fd) {
+  //        struct dir* dir = dir_open(d->dir->inode);
+  //        bool success = dir_readdir(dir, name);
+  //        return success;
+  //    }
+  //  }
 
   return false;
 }

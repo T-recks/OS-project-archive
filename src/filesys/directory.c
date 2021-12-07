@@ -6,10 +6,25 @@
 #include "filesys/inode.h"
 #include "threads/malloc.h"
 
+/* A directory. */
+struct dir {
+  struct inode* inode; /* Backing store. */
+  off_t pos;           /* Current position. */
+};
+
+/* A single directory entry. */
+struct dir_entry {
+  block_sector_t inode_sector; /* Sector number of header. */
+  char name[NAME_MAX + 1];     /* Null terminated file name. */
+  bool in_use;                 /* In use or free? */
+  struct dir_entry* loc;       /* Pointer to "." directory */
+  struct dir_entry* parent;    /* Pointer to ".." directory */
+};
+
 /* Creates a directory with space for ENTRY_CNT entries in the
    given SECTOR.  Returns true if successful, false on failure. */
 bool dir_create(block_sector_t sector, size_t entry_cnt) {
-  return inode_create(sector, entry_cnt * sizeof(struct dir_entry));
+  return inode_create(sector, entry_cnt * sizeof(struct dir_entry), true);
 }
 
 /* Opens and returns the directory for the given INODE, of which
@@ -54,8 +69,15 @@ struct inode* dir_get_inode(struct dir* dir) {
 
 block_sector_t dir_get_sector(struct dir* dir) { return inode_get_inumber(dir->inode); }
 
-struct dir_entry* dir_get_parent(struct dir_entry* dir) {
-  return dir->parent;
+struct dir_entry* dir_get_parent(struct dir* dir) {
+  struct dir_entry e;
+  size_t ofs;
+
+  for (ofs = 0; inode_read_at(dir->inode, &e, sizeof e, ofs) == sizeof e; ofs += sizeof e)
+    if (e.in_use && e.parent != NULL && e.parent->parent != NULL) {
+      return e.parent->parent;
+    }
+  return NULL;
 }
 
 /* Searches DIR for a file with the given NAME.
@@ -229,6 +251,9 @@ struct dir* traverse(struct inode* inode, const char* path, struct dir** parent,
   struct dir* d = malloc(sizeof(struct dir));
   struct inode* next_inode;
   char next_part[NAME_MAX + 1];
+  if (name != NULL) {
+    strlcpy(name, path, strlen(path) + 1);
+  }
   bool success;
 
   d->inode = inode;
@@ -237,10 +262,16 @@ struct dir* traverse(struct inode* inode, const char* path, struct dir** parent,
   get_next_part(next_part, &path);
   while ((success = dir_lookup(d, next_part, &next_inode))) {
     get_next_part(next_part, &path);
-    strlcpy(name, next_part, strlen(next_part));
-    *parent = d;
-    d->inode = next_inode;
-    d->pos = 0;
+    if (name != NULL) {
+      strlcpy(name, next_part, strlen(next_part) + 1);
+    }
+    if (inode_is_dir(next_inode)) {
+      *parent = d;
+      d->inode = next_inode;
+      d->pos = 0;
+    } else {
+      return d;
+    }
   }
 
   return d;
