@@ -278,9 +278,25 @@ static int handle_compute_e(int n) { return sys_sum_to_e(n); }
 
 static bool handle_chdir(const char* path) {
   struct process* pcb = thread_current()->pcb;
-  strlcpy(pcb->cwd_name, path, MAX_DIR_LEN);
-  // TODO: traverse the path to change pcb->cwd
-  return false;
+  struct dir* parent = pcb->cwd;
+  struct dir* new_cwd;
+
+  // traverse to find directory specified by path
+  if (is_absolute(path)) {
+    new_cwd = traverse(inode_open(ROOT_DIR_SECTOR), path, &parent, NULL);
+  } else {
+    // TODO: handle "../" relative paths
+    new_cwd = traverse(dir_get_inode(parent), path, &parent, NULL);
+  }
+
+  if (new_cwd != NULL) { // found target directory
+    strlcpy(pcb->cwd_name, path, MAX_DIR_LEN);
+    pcb->cwd = new_cwd;
+    pcb->cwd_parent = parent;
+    return true;
+  } else { // no such directory
+    return false;
+  }
 }
 
 static bool handle_mkdir(const char* dir) {
