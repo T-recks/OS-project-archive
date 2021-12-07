@@ -368,7 +368,18 @@ static bool handle_readdir(int fd, char* name) {
   return false;
 }
 
-static bool handle_isdir(int fd UNUSED) { return false; }
+static bool handle_isdir(int fd) {
+    struct list* dirs = &(thread_current()->pcb->active_dirs);
+
+    for (struct list_elem* e = list_begin(dirs); e != list_end(dirs); e = list_next(e)) {
+        struct dir_data* d = list_entry(e, struct dir_data, elem);
+        if (fd == d->fd) {
+            return true;
+        }
+    }
+
+    return false;
+}
 
 static bool handle_inumber(int fd UNUSED) { return false; }
 
