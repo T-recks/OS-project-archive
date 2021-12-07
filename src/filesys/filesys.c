@@ -65,7 +65,6 @@ struct file* filesys_open(const char* name) {
     dir_lookup(dir, name, &inode);
   dir_close(dir);
 
-  // inode is NULL here
   return file_open(inode);
 }
 

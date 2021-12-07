@@ -297,7 +297,6 @@ void inode_allow_write(struct inode* inode) {
 off_t inode_length(const struct inode* inode) { return inode->data.length; }
 
 void cache_init() {
-  printf("\nCACHE INIT\n");
 
   f_buffer = (file_buffer_t*)malloc(sizeof(file_buffer_t));
 
@@ -321,7 +320,6 @@ void cache_init() {
 
 void cleanup_cache() {
 
-  printf("\nCACHE CLOSE\n");
   for (int i = 0; i < BUFFER_LEN; i++) {
     file_cache_block_t entry = f_buffer->buffer[i];
     if (entry.dirty && !entry.free) {
@@ -336,8 +334,6 @@ void cleanup_cache() {
 
 void cache_read(block_sector_t sector, void* buffer) {
   file_cache_block_t* block;
-
-  printf("\nCACHE READ\n");
 
   if (!clock_algorithm(sector, &block)) {
     // cache miss
@@ -354,8 +350,6 @@ void cache_read(block_sector_t sector, void* buffer) {
 
 void cache_write(block_sector_t sector, const void* buffer) {
   file_cache_block_t* block;
-
-  printf("\nCACHE WRITE\n");
 
   if (!clock_algorithm(sector, &block)) {
     // cache miss
@@ -380,7 +374,7 @@ bool clock_algorithm(block_sector_t sector_addr, file_cache_block_t** block) {
   // - If `sector_addr` in `file_buffer` and not `evicting`:
   for (int i = 0; i < BUFFER_LEN; i++) {
     entry = &f_buffer->buffer[i];
-    if (sector_addr == entry->sector) {
+    if (sector_addr == entry->sector && !entry->evicting) {
       //     - set appropriate `file_cache_block→in_use` to true
       //     - *block = &file_cache_block
       //     - release `replacement_lock`
@@ -389,13 +383,11 @@ bool clock_algorithm(block_sector_t sector_addr, file_cache_block_t** block) {
       *block = entry;
       lock_release(f_buffer->replacement_lock);
 
-      printf("\nCACHE HIT AT: %d\n", i);
       return true;
     }
   }
 
-  // - Else:
-  printf("\nCACHE MISS\n");
+  // - Else: cache miss
 
   //     - `advance_hand`
   advance_hand();
@@ -408,10 +400,6 @@ bool clock_algorithm(block_sector_t sector_addr, file_cache_block_t** block) {
     advance_hand();
     entry = &f_buffer->buffer[f_buffer->clock_hand];
   }
-
-  //     - set `file_cache_block→sector` to `sector_addr`
-  entry->sector = sector_addr;
-  printf("\nCACHE ALLOCATE: %d FOR %d\n", f_buffer->clock_hand, sector_addr);
 
   //     - If not `free`: evict the page
   if (!entry->free) {
@@ -438,6 +426,9 @@ bool clock_algorithm(block_sector_t sector_addr, file_cache_block_t** block) {
   //     - set `free` to 0, `in_use` to 1
   entry->free = false;
   entry->in_use = true;
+  
+  //     - set `file_cache_block→sector` to `sector_addr`
+  entry->sector = sector_addr;
 
   //     - *block = &file_cache_block
   *block = entry;
