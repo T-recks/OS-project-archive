@@ -364,9 +364,9 @@ static bool handle_readdir(int fd, char* name) {
   return false;
 }
 
-static bool handle_isdir(int fd) { return false; }
+static bool handle_isdir(int fd UNUSED) { return false; }
 
-static bool handle_inumber(int fd) { return false; }
+static bool handle_inumber(int fd UNUSED) { return false; }
 
 /* Validate ARGS by ensuring each address points to valid memory.
  * Valid pointers are not null, reference below PHYS_BASE/are not
