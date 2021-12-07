@@ -18,11 +18,10 @@ typedef tid_t pid_t;
 typedef void (*pthread_fun)(void*);
 typedef void (*stub_fun)(pthread_fun, void*);
 
-
 struct dir_data {
   struct dir* dir; /* Directory pointer */
   char* name;
-  int fd;          /* File descriptor of this directory */
+  int fd; /* File descriptor of this directory */
   struct list_elem elem;
 };
 
@@ -37,9 +36,9 @@ struct process {
   char process_name[16];      /* Name of the main thread */
   struct thread* main_thread; /* Pointer to main thread */
   struct list* argv;
-  struct wait_status *ws;     /* Wait status struct of the parent */
-  struct list* waits;         /* List of children this process' children */
-  struct list* open_files;    /* All files opened by this process */
+  struct wait_status* ws;  /* Wait status struct of the parent */
+  struct list* waits;      /* List of children this process' children */
+  struct list* open_files; /* All files opened by this process */
   struct dir* cwd;
   char* cwd_name;
   struct dir* cwd_parent;

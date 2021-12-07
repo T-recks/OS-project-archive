@@ -140,7 +140,7 @@ static void start_process(void* file_name_) {
 
   /* open root dir */
   new_pcb->cwd = dir_open_root();
-  new_pcb->cwd_name = malloc(MAX_DIR_LEN*sizeof(char));
+  new_pcb->cwd_name = malloc(MAX_DIR_LEN * sizeof(char));
   strlcpy(new_pcb->cwd_name, "/", 1);
   new_pcb->cwd_parent = new_pcb->cwd;
 

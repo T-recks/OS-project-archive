@@ -37,6 +37,7 @@ struct dir* dir_reopen(struct dir*);
 void dir_close(struct dir*);
 struct inode* dir_get_inode(struct dir*);
 block_sector_t dir_get_sector(struct dir* dir);
+struct dir_entry* dir_get_parent(struct dir_entry* dir);
 
 /* Reading and writing. */
 bool dir_lookup(const struct dir*, const char* name, struct inode**);

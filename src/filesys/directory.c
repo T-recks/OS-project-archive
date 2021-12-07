@@ -54,6 +54,10 @@ struct inode* dir_get_inode(struct dir* dir) {
 
 block_sector_t dir_get_sector(struct dir* dir) { return inode_get_inumber(dir->inode); }
 
+struct dir_entry* dir_get_parent(struct dir_entry* dir) {
+  return dir->parent;
+}
+
 /* Searches DIR for a file with the given NAME.
    If successful, returns true, sets *EP to the directory entry
    if EP is non-null, and sets *OFSP to the byte offset of the
@@ -240,9 +244,4 @@ struct dir* traverse(struct inode* inode, const char* path, struct dir** parent,
   }
 
   return d;
-  //  if (success) {
-  //    return d;
-  //  } else {
-  //    return NULL;
-  //  }
 }
