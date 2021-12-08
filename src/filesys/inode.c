@@ -417,7 +417,7 @@ off_t inode_write_at(struct inode* inode, const void* buffer_, off_t size, off_t
 
   // TODO: Get the data from the cache
   if (offset + size > inode->data.length) {
-    inode_resize(&inode->data, offset + size + inode->data.length);
+    inode_resize(&inode->data, offset + size);
   }
 
   while (size > 0) {
