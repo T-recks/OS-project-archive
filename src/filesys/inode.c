@@ -30,7 +30,6 @@ file_buffer_t* f_buffer;
 bool clock_algorithm(block_sector_t sector_addr, file_cache_block_t** block);
 void advance_hand(void);
 
-
 /* Returns the number of sectors to allocate for an inode SIZE
    bytes long. */
 static inline size_t bytes_to_sectors(off_t size) { return DIV_ROUND_UP(size, BLOCK_SECTOR_SIZE); }
@@ -44,9 +43,6 @@ struct inode {
   int deny_write_cnt;     /* 0: writes ok, >0: deny writes. */
   struct inode_disk data; /* Inode content. */
 };
-
-void cache_read(struct block* block, block_sector_t sector, void* buffer) {}
-void cache_write(struct block* block, block_sector_t sector, const void* buffer) {}
 
 /* Returns the block device sector that contains byte offset POS
    within INODE.
@@ -271,7 +267,6 @@ bool inode_create(block_sector_t sector, off_t length, bool isdir) {
 
         //        for (i = 0; i < sectors; i++)
         //          block_write(fs_device, disk_inode->start + i, zeros);
-
       }
       success = true;
     }
@@ -621,7 +616,7 @@ bool clock_algorithm(block_sector_t sector_addr, file_cache_block_t** block) {
   //     - set `free` to 0, `in_use` to 1
   entry->free = false;
   entry->in_use = true;
-  
+
   //     - set `file_cache_block→sector` to `sector_addr`
   entry->sector = sector_addr;
 
