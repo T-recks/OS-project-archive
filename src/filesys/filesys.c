@@ -25,6 +25,23 @@ bool is_absolute(const char* path) { return path[0] == '\\' || path[0] == '/'; }
 
 bool parent_path(const char* path) { return strlen(path) >= 2 && path[0] == '.' && path[1] == '.'; }
 
+/* Takes a relative PATH; return false if given absolute path.
+ * Expands it to an absolute path and stores in DEST.
+ * The caller is responsible for making sure DEST and S are large
+ * enough to store the full path.
+ */
+bool expand_path(char* dst, const char* path, size_t size) {
+    if (is_absolute(path)) {
+        return false;
+    } else {
+        char* cwd = thread_current()->pcb->cwd_name;
+        strlcpy(dst, cwd, strlen(cwd)); // copy cwd
+        strlcat(dst, "/", 1); // append "/"
+        strlcat(dst, path, size); // append path
+        return true;
+    }
+}
+
 /* Returns the directory the file is located in, storing the parsed
  * name of the file in NAME */
 static struct dir* parse_dir(const char* path, char name[NAME_MAX + 1]) {

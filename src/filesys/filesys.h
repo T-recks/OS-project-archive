@@ -18,5 +18,6 @@ struct file* filesys_open(const char* name);
 bool filesys_remove(const char* name);
 bool is_absolute(const char* path);
 bool parent_path(const char* path);
+bool expand_path(char* dst, const char* path, size_t size);
 
 #endif /* filesys/filesys.h */
