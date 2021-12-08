@@ -68,6 +68,7 @@ void filesys_init(bool format) {
   if (fs_device == NULL)
     PANIC("No file system device found, can't initialize file system.");
 
+  cache_init();
   inode_init();
   free_map_init();
 
@@ -79,7 +80,10 @@ void filesys_init(bool format) {
 
 /* Shuts down the file system module, writing any unwritten data
    to disk. */
-void filesys_done(void) { free_map_close(); }
+void filesys_done(void) {
+  cleanup_cache();
+  free_map_close();
+}
 
 /* Creates a file named NAME with the given INITIAL_SIZE.
    Returns true if successful, false otherwise.
