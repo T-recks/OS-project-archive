@@ -68,7 +68,7 @@ static block_sector_t byte_to_sector(const struct inode* inode, off_t pos) {
   // TODO: Get the inode_disk from the cache
   struct inode_disk data = inode->data;
 
-  while (pos >= BLOCK_SECTOR_SIZE && index < NUM_DIR_PTR) {
+  while (pos >= BLOCK_SECTOR_SIZE && index < NUM_DIR_PTR - 1) {
     // Start counting how many blocks above the first block the offset it
     pos -= BLOCK_SECTOR_SIZE;
     index += 1;
@@ -83,33 +83,48 @@ static block_sector_t byte_to_sector(const struct inode* inode, off_t pos) {
 
   // Look through indirect pointers
   if (pos <= 128 * BLOCK_SECTOR_SIZE) {
-    block_sector_t ind_block = data.ind_ptr;
-    for (int i = 0; i < 128; i++) {
-      block_sector_t block = ind_block;
-      if (index * BLOCK_SECTOR_SIZE >= pos) {
-        return block;
-      }
+    pos -= BLOCK_SECTOR_SIZE;
+    block_sector_t buffer[128];
+    memset(buffer, 0, 512);
+    block_read(fs_device, data.ind_ptr, buffer);
+    index = 0;
+    while (pos >= BLOCK_SECTOR_SIZE && index < 127) {
       pos -= BLOCK_SECTOR_SIZE;
       index += 1;
-      ind_block++;
+    }
+
+    if (pos < BLOCK_SECTOR_SIZE) {
+      return buffer[index];
+    } else if (data.dbl_ind_ptr == 0) {
+      // Offset is past end of file
+      return -1;
     }
   }
 
+  // TODO: has not been tested
   // Look through doubly direct pointers
   pos -= 128 * BLOCK_SECTOR_SIZE;
-  block_sector_t dbl_ind_block = data.dbl_ind_ptr;
+  block_sector_t ind_buffer[128];
+  memset(ind_buffer, 0, 512);
+  block_read(fs_device, data.ind_ptr, ind_buffer);
   for (int i = 0; i < 128; i++) {
-    block_sector_t ind_block = dbl_ind_block;
+    block_sector_t buffer[128];
+    memset(buffer, 0, 512);
+    block_sector_t ind_block = ind_buffer[i];
+    block_read(fs_device, ind_block, buffer);
     block_sector_t block = ind_block;
-    for (int k = 0; k < 128; k++) {
-      if (index * BLOCK_SECTOR_SIZE >= pos) {
-        return block;
-      }
+    index = 0;
+    while (pos >= BLOCK_SECTOR_SIZE && index < 127) {
       pos -= BLOCK_SECTOR_SIZE;
       index += 1;
-      ind_block++;
     }
-    dbl_ind_block++;
+
+    if (pos < BLOCK_SECTOR_SIZE) {
+      return buffer[index];
+    } else if (data.dbl_ind_ptr == 0) {
+      // Offset is past end of file
+      return -1;
+    }
   }
 
   //  if (pos < inode->data.length)
