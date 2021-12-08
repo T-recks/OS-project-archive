@@ -297,7 +297,8 @@ static bool handle_chdir(const char* path) {
   }
 
   if (new_cwd != NULL) { // found target directory
-    strlcpy(pcb->cwd_name, path, MAX_DIR_LEN);
+    // TODO: should translate relative paths to absolute before storing
+    strlcpy(pcb->cwd_name, path, MAX_DIR_LEN); 
     pcb->cwd = new_cwd;
     pcb->cwd_parent = parent;
     return true;
