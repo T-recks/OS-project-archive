@@ -236,7 +236,7 @@ void inode_init(void) { list_init(&open_inodes); }
    device.
    Returns true if successful.
    Returns false if memory or disk allocation fails. */
-bool inode_create(block_sector_t sector, off_t length) {
+bool inode_create(block_sector_t sector, off_t length, bool isdir) {
   struct inode_disk* disk_inode = NULL;
   bool success = false;
 
@@ -251,6 +251,7 @@ bool inode_create(block_sector_t sector, off_t length) {
     size_t sectors = bytes_to_sectors(length);
     disk_inode->length = length;
     disk_inode->magic = INODE_MAGIC;
+    disk_inode->isdir = isdir;
     if (inode_resize(disk_inode, length)) {
       //    if (free_map_allocate(sectors, &disk_inode->start)) {
       block_write(fs_device, sector, disk_inode);
@@ -308,6 +309,11 @@ struct inode* inode_reopen(struct inode* inode) {
 
 /* Returns INODE's inode number. */
 block_sector_t inode_get_inumber(const struct inode* inode) { return inode->sector; }
+
+bool inode_is_dir(struct inode* inode) {
+  // TODO: get this from cache
+  return inode->data.isdir;
+}
 
 /* Closes INODE and writes it to disk.
    If this was the last reference to INODE, frees its memory.
