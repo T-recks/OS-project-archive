@@ -13,6 +13,9 @@
 #include "filesys/file.h"
 #include <string.h>
 #include "filesys/filesys.h"
+#include "filesys/directory.h"
+#include "filesys/inode.h"
+#include "filesys/free-map.h"
 
 static void syscall_handler(struct intr_frame*);
 static bool handle_close(const int fd);
@@ -33,9 +36,13 @@ void close_all_files(void) {
   }
   lock_acquire(&filesys_lock);
   while (!list_empty(fd_table)) {
-    struct list_elem *e = list_pop_front(fd_table);
+    struct list_elem* e = list_pop_front(fd_table);
     struct file_data* f = list_entry(e, struct file_data, elem);
-    file_close(f->file);
+    if (f->file != NULL) {
+      file_close(f->file);
+    } else {
+      dir_close(f->dir);
+    }
     f->ref_cnt--;
     if (f->ref_cnt == 0) {
       list_remove(e);
@@ -50,19 +57,17 @@ void clear_cmdline(void) {
   if (argv == NULL)
     return;
   while (!list_empty(argv)) {
-    struct list_elem *e = list_pop_front(argv);
+    struct list_elem* e = list_pop_front(argv);
     struct word* w = list_entry(e, struct word, elem);
     list_remove(e);
     free(w);
   }
 }
 
-static int handle_practice(int val) {
-  return val + 1;
-}
+static int handle_practice(int val) { return val + 1; }
 
 void handle_exit(int status) {
-  struct process *pcb = thread_current()->pcb;
+  struct process* pcb = thread_current()->pcb;
   printf("%s: exit(%d)\n", pcb->process_name, status);
   if (pcb->ws == NULL) {
     goto done;
@@ -83,9 +88,9 @@ void handle_exit(int status) {
     goto done;
   }
   // Decrement the ref count of each of the child waiters
-  struct list_elem *e;
-  struct wait_status *w;
-  for (e = list_begin(pcb->waits); e!= list_end(pcb->waits); e = list_next(e)) {
+  struct list_elem* e;
+  struct wait_status* w;
+  for (e = list_begin(pcb->waits); e != list_end(pcb->waits); e = list_next(e)) {
     w = list_entry(e, struct wait_status, elem);
     lock_acquire(&w->lock);
     w->ref_cnt -= 1;
@@ -101,16 +106,16 @@ done:
   process_exit();
 }
 
-static int handle_exec(const char *cmd_line) {
-  
+static int handle_exec(const char* cmd_line) {
+
   // Initialize the share wait status struct
-  struct wait_status *ws = (struct wait_status*)malloc(sizeof(struct wait_status));
+  struct wait_status* ws = (struct wait_status*)malloc(sizeof(struct wait_status));
   sema_init(&ws->sema_load, 0);
   sema_init(&ws->sema_wait, 0);
   lock_init(&ws->lock);
   ws->loaded = false;
   ws->ref_cnt = 2;
-  
+
   pid_t pid = process_execute(cmd_line, ws);
   // Wait for the child process to finish loading
   sema_down(&ws->sema_load); // Child calls sema_up in start_process
@@ -119,12 +124,12 @@ static int handle_exec(const char *cmd_line) {
     return -1;
   } else {
     // Add the child to the list of active children
-    struct list_elem *e = (struct list_elem*)malloc(sizeof(struct list_elem));
+    struct list_elem* e = (struct list_elem*)malloc(sizeof(struct list_elem));
     ws->elem = *e;
     ws->loaded = true;
     ws->pid = pid;
     list_push_back(thread_current()->pcb->waits, &ws->elem);
-    
+
     return pid;
   }
 }
@@ -133,6 +138,7 @@ static int handle_open(char* filename) {
   struct list* fd_table = thread_current()->pcb->open_files;
   lock_acquire(&filesys_lock);
   // call filesys_open, if get NULL then handle failed open
+  // TODO: files in different directories with different names
   struct file* new_file = filesys_open(filename);
   if (new_file == NULL) {
     lock_release(&filesys_lock);
@@ -184,7 +190,7 @@ static int handle_filesize(int fd) {
   struct list* fd_table = thread_current()->pcb->open_files;
   lock_acquire(&filesys_lock);
   // check the fd table for the given fd, return false if not present
-  struct file_data *f = find_file(fd, fd_table);
+  struct file_data* f = find_file(fd, fd_table);
   if (f != NULL) {
     int length = file_length(f->file);
     lock_release(&filesys_lock);
@@ -198,7 +204,7 @@ static int handle_read(int fd, void* buffer, unsigned size) {
   struct list* fd_table = thread_current()->pcb->open_files;
   lock_acquire(&filesys_lock);
   // check the fd table for the given fd, return false if not present
-  struct file_data *f = find_file(fd, fd_table);
+  struct file_data* f = find_file(fd, fd_table);
   if (f != NULL) {
     int result = file_read(f->file, buffer, size);
     lock_release(&filesys_lock);
@@ -214,6 +220,9 @@ static int handle_wait(pid_t pid) {
 }
 
 static bool handle_create(char* file, unsigned size) {
+  if (strlen(file) > NAME_MAX) {
+    return false;
+  }
   lock_acquire(&filesys_lock);
   bool success = filesys_create(file, size);
   lock_release(&filesys_lock);
@@ -238,7 +247,7 @@ static int handle_write(uint32_t* args) {
     return size;
   } else {
     struct list* fd_table = thread_current()->pcb->open_files;
-    struct file_data *f = find_file(fd, fd_table);
+    struct file_data* f = find_file(fd, fd_table);
     if (f != NULL) {
       int result = file_write(f->file, buf, size);
       lock_release(&filesys_lock);
@@ -252,7 +261,7 @@ static int handle_write(uint32_t* args) {
 static void handle_seek(int fd, unsigned position) {
   lock_acquire(&filesys_lock);
   struct list* fd_table = thread_current()->pcb->open_files;
-  struct file_data *f = find_file(fd, fd_table);
+  struct file_data* f = find_file(fd, fd_table);
   if (f != NULL) {
     file_seek(f->file, position);
   }
@@ -262,7 +271,7 @@ static void handle_seek(int fd, unsigned position) {
 static unsigned handle_tell(int fd) {
   lock_acquire(&filesys_lock);
   struct list* fd_table = thread_current()->pcb->open_files;
-  struct file_data *f = find_file(fd, fd_table);
+  struct file_data* f = find_file(fd, fd_table);
   if (f != NULL) {
     int position = file_tell(f->file);
     lock_release(&filesys_lock);
@@ -272,8 +281,113 @@ static unsigned handle_tell(int fd) {
   return -1;
 }
 
-static int handle_compute_e(int n) {
-  return sys_sum_to_e(n);
+static int handle_compute_e(int n) { return sys_sum_to_e(n); }
+
+static bool handle_chdir(const char* path) {
+  struct process* pcb = thread_current()->pcb;
+  struct dir* parent = pcb->cwd;
+  struct dir* new_cwd;
+
+  // traverse to find directory specified by path
+  if (is_absolute(path)) {
+    new_cwd = traverse(inode_open(ROOT_DIR_SECTOR), path, &parent, NULL);
+  } else {
+    // TODO: handle "../" relative paths
+    new_cwd = traverse(dir_get_inode(parent), path, &parent, NULL);
+  }
+
+  if (new_cwd != NULL) { // found target directory
+    // TODO: should translate relative paths to absolute before storing
+    strlcpy(pcb->cwd_name, path, MAX_DIR_LEN); 
+    pcb->cwd = new_cwd;
+    pcb->cwd_parent = parent;
+    return true;
+  } else { // no such directory
+    return false;
+  }
+}
+
+static bool handle_mkdir(const char* dir) {
+  struct dir* parent = thread_current()->pcb->cwd;
+  bool success;
+  char name[NAME_MAX + 1];
+  //  strlcpy(name, dir, strlen(dir) + 1);
+  if (is_absolute(dir)) {
+    // Traverse the directory tree from the root
+    traverse(inode_open(ROOT_DIR_SECTOR), dir, &parent, name);
+  } else {
+    // Traverse the directory tree from CWD
+    traverse(dir_get_inode(parent), dir, &parent, name);
+  }
+
+  // Create the new directory in the parent directory
+  struct inode* new_inode;
+  block_sector_t new_sector;
+  success = free_map_allocate(1, &new_sector);    // Allocate the new sector
+  success = dir_create(new_sector, 16);           // Create the new directory
+  success = dir_add(parent, name, new_sector);    // Add directory to parent
+  success = dir_lookup(parent, name, &new_inode); // Get the new inode
+  if (!success) {
+    // TODO: might need to do some cleanup before returning
+    return false;
+  }
+
+  // Add the directory to the list of open files
+  struct dir* new_dir = dir_open(new_inode);
+  struct list* fd_table = thread_current()->pcb->open_files;
+  struct file_data* fd_entry = (struct file_data*)malloc(sizeof(struct file_data));
+  fd_entry->dir = new_dir;
+  fd_entry->file = NULL;
+  fd_entry->filename = (char*)name;
+  fd_entry->ref_cnt = 1;
+  if (!list_empty(fd_table)) {
+    struct list_elem* e = list_back(fd_table);
+    struct file_data* f = list_entry(e, struct file_data, elem);
+    fd_entry->fd = f->fd + 1;
+  } else {
+    fd_entry->fd = 3;
+  }
+  list_push_back(fd_table, &fd_entry->elem);
+  return true;
+}
+
+static bool handle_readdir(int fd, char* name) {
+  //  struct list* dirs = &(thread_current()->pcb->active_dirs);
+  //
+  //  for (struct list_elem* e = list_begin(dirs); e != list_end(dirs); e = list_next(e)) {
+  //    struct dir_data* d = list_entry(e, struct dir_data, elem);
+  //    if (fd == d->fd) {
+  //        struct dir* dir = dir_open(d->dir->inode);
+  //        bool success = dir_readdir(dir, name);
+  //        return success;
+  //    }
+  //  }
+
+  return false;
+}
+
+static bool handle_isdir(int fd) {
+  struct list* dirs = &(thread_current()->pcb->active_dirs);
+
+  for (struct list_elem* e = list_begin(dirs); e != list_end(dirs); e = list_next(e)) {
+    struct dir_data* d = list_entry(e, struct dir_data, elem);
+    if (fd == d->fd) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+static int handle_inumber(int fd) {
+  struct list* fd_table = thread_current()->pcb->open_files;
+  struct file_data* file = find_file(fd, fd_table);
+  if (file->file != NULL) {
+    return inode_get_inumber(file_get_inode(file->file));
+  } else {
+    return inode_get_inumber(dir_get_inode(file->dir));
+  }
+  return false;
 }
 
 /* Validate ARGS by ensuring each address points to valid memory.
@@ -282,9 +396,10 @@ static int handle_compute_e(int n) {
 */
 static void validate_args(struct intr_frame* f, uint32_t* args, int n) {
   int i = 1;
-  
+
   int vldt_i = -1;
-  if (args[0] == SYS_EXEC || args[0] == SYS_OPEN || args[0] == SYS_CREATE || args[0] == SYS_REMOVE) {
+  if (args[0] == SYS_EXEC || args[0] == SYS_OPEN || args[0] == SYS_CREATE ||
+      args[0] == SYS_REMOVE) {
     vldt_i = 1;
   }
   if (args[0] == SYS_READ || args[0] == SYS_WRITE) {
@@ -292,35 +407,40 @@ static void validate_args(struct intr_frame* f, uint32_t* args, int n) {
   }
   if (vldt_i != -1) {
     // Argument is a pointer, make sure it's valid
-    if (is_kernel_vaddr((void*)(&args[vldt_i]+1)) || pagedir_get_page(active_pd(), (void*)&args[vldt_i]+1) == NULL || args[vldt_i] == (int)NULL) {
+    if (is_kernel_vaddr((void*)(&args[vldt_i] + 1)) ||
+        pagedir_get_page(active_pd(), (void*)&args[vldt_i] + 1) == NULL ||
+        args[vldt_i] == (int)NULL) {
       f->eax = -1;
       handle_exit(-1);
     }
-    if (is_kernel_vaddr((void*)(args[vldt_i]+1)) || pagedir_get_page(active_pd(), (void*)args[vldt_i]+1) == NULL || args[vldt_i] == (int)NULL) {
+    if (is_kernel_vaddr((void*)(args[vldt_i] + 1)) ||
+        pagedir_get_page(active_pd(), (void*)args[vldt_i] + 1) == NULL ||
+        args[vldt_i] == (int)NULL) {
       f->eax = -1;
       handle_exit(-1);
     }
   }
-  
-  for (; i != n+1; i++) {
-    if ((void*)args[i] == NULL && (args[0] != SYS_EXIT && args[0] != SYS_READ && args[0] != SYS_WRITE &&
-                                   args[0] != SYS_SEEK && args[0] != SYS_TELL && args[0] != SYS_CREATE)) {
+
+  for (; i != n + 1; i++) {
+    if ((void*)args[i] == NULL &&
+        (args[0] != SYS_EXIT && args[0] != SYS_READ && args[0] != SYS_WRITE &&
+         args[0] != SYS_SEEK && args[0] != SYS_TELL && args[0] != SYS_CREATE)) {
       // exit(0) is a successfull exit, reading/writing 0 bytes is valid
       break;
     }
     // For checking if the pointer is to invalid memory, add 1 byte to the
     // address to account for the case some bytes of the address are
     // valid but the others are not (address lies on a page boundary).
-    if (is_kernel_vaddr((void*)(&args[i]+1))) {
+    if (is_kernel_vaddr((void*)(&args[i] + 1))) {
       // Referencing kernel memory.
       break;
     }
-    if (pagedir_get_page(active_pd(), (void*)(&args[i]+1)) == NULL) {
+    if (pagedir_get_page(active_pd(), (void*)(&args[i] + 1)) == NULL) {
       // Referencing memory not in the page directory
       break;
     }
   }
-  if (i != n+1) {
+  if (i != n + 1) {
     // Invalid memory access, terminate the process
     f->eax = -1;
     handle_exit(-1);
@@ -337,10 +457,11 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
    * include it in your final submission.
    */
 
-//  printf("System call number: %d\n", args[0]);
-  
+  //  printf("System call number: %d\n", args[0]);
+
   // Case where the stack is too large and all bytes of the esp are in invalid memory
-  if (f->ebp - (uint32_t)f->esp > 4096 && pagedir_get_page(active_pd(), (void*)(f->esp+1)) == NULL) {
+  if (f->ebp - (uint32_t)f->esp > 4096 &&
+      pagedir_get_page(active_pd(), (void*)(f->esp + 1)) == NULL) {
     handle_exit(-1);
   }
 
@@ -404,6 +525,26 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
     case SYS_COMPUTE_E:
       //TODO: Validate
       f->eax = handle_compute_e(args[1]);
+      break;
+    case SYS_CHDIR:
+      //TODO: validate
+      f->eax = handle_chdir((char*)args[1]);
+      break;
+    case SYS_MKDIR:
+      //TODO: validate
+      f->eax = handle_mkdir((char*)args[1]);
+      break;
+    case SYS_READDIR:
+      //TODO: validate
+      f->eax = handle_readdir((int)args[1], (char*)args[2]);
+      break;
+    case SYS_ISDIR:
+      //TODO: validate
+      f->eax = handle_isdir((int)args[1]);
+      break;
+    case SYS_INUMBER:
+      //TODO: validate
+      f->eax = handle_inumber((int)args[1]);
       break;
   }
 }
