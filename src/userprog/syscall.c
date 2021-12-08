@@ -366,19 +366,28 @@ static bool handle_readdir(int fd, char* name) {
 }
 
 static bool handle_isdir(int fd) {
-    struct list* dirs = &(thread_current()->pcb->active_dirs);
+  struct list* dirs = &(thread_current()->pcb->active_dirs);
 
-    for (struct list_elem* e = list_begin(dirs); e != list_end(dirs); e = list_next(e)) {
-        struct dir_data* d = list_entry(e, struct dir_data, elem);
-        if (fd == d->fd) {
-            return true;
-        }
+  for (struct list_elem* e = list_begin(dirs); e != list_end(dirs); e = list_next(e)) {
+    struct dir_data* d = list_entry(e, struct dir_data, elem);
+    if (fd == d->fd) {
+      return true;
     }
+  }
 
-    return false;
+  return false;
 }
 
-static bool handle_inumber(int fd UNUSED) { return false; }
+static int handle_inumber(int fd) {
+  struct list* fd_table = thread_current()->pcb->open_files;
+  struct file_data* file = find_file(fd, fd_table);
+  if (file->file != NULL) {
+    return inode_get_inumber(file_get_inode(file->file));
+  } else {
+    return inode_get_inumber(dir_get_inode(file->dir));
+  }
+  return false;
+}
 
 /* Validate ARGS by ensuring each address points to valid memory.
  * Valid pointers are not null, reference below PHYS_BASE/are not

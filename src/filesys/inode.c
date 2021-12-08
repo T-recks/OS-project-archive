@@ -243,6 +243,10 @@ static bool inode_resize(struct inode_disk* id, off_t size) {
    returns the same `struct inode'. */
 static struct list open_inodes;
 
+struct list inode_get_list(void) {
+  return open_inodes;
+}
+
 /* Initializes the inode module. */
 void inode_init(void) { list_init(&open_inodes); }
 
@@ -425,7 +429,7 @@ off_t inode_write_at(struct inode* inode, const void* buffer_, off_t size, off_t
 
   // TODO: Get the data from the cache
   if (offset + size > inode->data.length) {
-    inode_resize(&inode->data, size);
+    inode_resize(&inode->data, size + inode->data.length);
   }
 
   while (size > 0) {
