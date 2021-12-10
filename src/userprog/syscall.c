@@ -344,9 +344,9 @@ static bool handle_mkdir(const char* dir) {
   struct inode* new_inode;
   block_sector_t new_sector;
   success = free_map_allocate(1, &new_sector);    // Allocate the new sector
-  success = dir_create(new_sector, 16);           // Create the new directory
-  success = dir_add(parent, name, new_sector);    // Add directory to parent
-  success = dir_lookup(parent, name, &new_inode); // Get the new inode
+  success = success && dir_create(new_sector, 16);           // Create the new directory
+  success = success && dir_add(parent, name, new_sector);    // Add directory to parent
+  success = success && dir_lookup(parent, name, &new_inode); // Get the new inode
   if (!success) {
     // TODO: might need to do some cleanup before returning
     return false;
