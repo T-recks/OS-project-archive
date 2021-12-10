@@ -329,13 +329,15 @@ static bool handle_mkdir(const char* dir) {
   struct dir* parent = thread_current()->pcb->cwd;
   bool success;
   char name[NAME_MAX + 1];
+  struct dir* temp;
+  
   //  strlcpy(name, dir, strlen(dir) + 1);
   if (is_absolute(dir)) {
     // Traverse the directory tree from the root
-    traverse(inode_open(ROOT_DIR_SECTOR), dir, &parent, name, false);
+    temp = traverse(inode_open(ROOT_DIR_SECTOR), dir, &parent, name, false);
   } else {
     // Traverse the directory tree from CWD
-    traverse(dir_get_inode(parent), dir, &parent, name, false);
+    temp = traverse(dir_get_inode(parent), dir, &parent, name, false);
   }
 
   // Create the new directory in the parent directory
@@ -366,6 +368,7 @@ static bool handle_mkdir(const char* dir) {
     fd_entry->fd = 3;
   }
   list_push_back(fd_table, &fd_entry->elem);
+  free(temp);
   return true;
 }
 

@@ -246,8 +246,10 @@ static int get_next_part(char part[NAME_MAX + 1], const char** srcp) {
   return 1;
 }
 
-// if stop_early==true, traverse only as far as the second to last part of path,
-// otherwise follow the full path
+/* TODO: further document this function.
+ * if stop_early==true, traverse only as far as the second to last part of path,
+ * otherwise follow the full path
+ */
 struct dir* traverse(struct inode* inode, const char* path, struct dir** parent,
                      char name[NAME_MAX + 1], bool stop_early) {
   struct dir* d = malloc(sizeof(struct dir));
