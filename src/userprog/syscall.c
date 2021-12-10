@@ -230,6 +230,7 @@ static bool handle_create(char* file, unsigned size) {
 }
 
 static bool handle_remove(char* file) {
+  if (!strcmp(file, "/")) return false; // never remove root
   struct dir* location;
   bool success = false;
   char name[NAME_MAX+1];
