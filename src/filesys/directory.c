@@ -288,14 +288,14 @@ struct dir* traverse(struct inode* inode, const char* path, struct dir** parent,
 /* Return true if dir contains no active entries.
  */
 bool dir_is_empty(const struct dir* dir) {
-  /* struct dir_entry e; */
-  /* size_t ofs; */
+  struct dir_entry e;
+  size_t ofs;
 
-  /* // Search dir for an active entry and return false only if we find one */
-  /* for (ofs = 0; inode_read_at(dir->inode, &e, sizeof e, ofs) == sizeof e; ofs += sizeof e) { */
-  /*     if (e.in_use) { */
-  /*       return false; */
-  /*     } */
-  /* } */
+  // Search dir for an active entry and return false only if we find one
+  for (ofs = 0; inode_read_at(dir->inode, &e, sizeof e, ofs) == sizeof e; ofs += sizeof e) {
+      if (e.in_use) {
+        return false;
+      }
+  }
   return true;
 }
