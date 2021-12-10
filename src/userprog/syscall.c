@@ -290,10 +290,10 @@ static bool handle_chdir(const char* path) {
 
   // traverse to find directory specified by path
   if (is_absolute(path)) {
-    new_cwd = traverse(inode_open(ROOT_DIR_SECTOR), path, &parent, NULL);
+    new_cwd = traverse(inode_open(ROOT_DIR_SECTOR), path, &parent, NULL, false);
   } else {
     // TODO: handle "../" relative paths
-    new_cwd = traverse(dir_get_inode(parent), path, &parent, NULL);
+    new_cwd = traverse(dir_get_inode(parent), path, &parent, NULL, false);
   }
 
   if (new_cwd != NULL) { // found target directory
@@ -314,10 +314,10 @@ static bool handle_mkdir(const char* dir) {
   //  strlcpy(name, dir, strlen(dir) + 1);
   if (is_absolute(dir)) {
     // Traverse the directory tree from the root
-    traverse(inode_open(ROOT_DIR_SECTOR), dir, &parent, name);
+    traverse(inode_open(ROOT_DIR_SECTOR), dir, &parent, name, false);
   } else {
     // Traverse the directory tree from CWD
-    traverse(dir_get_inode(parent), dir, &parent, name);
+    traverse(dir_get_inode(parent), dir, &parent, name, false);
   }
 
   // Create the new directory in the parent directory

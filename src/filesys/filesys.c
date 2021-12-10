@@ -57,7 +57,7 @@ static struct dir* parse_dir(const char* path, char name[NAME_MAX + 1]) {
   }
 
   struct dir* parent;
-  dir = traverse(dir_get_inode(dir), path, &parent, name);
+  dir = traverse(dir_get_inode(dir), path, &parent, name, false);
   return dir;
 }
 
