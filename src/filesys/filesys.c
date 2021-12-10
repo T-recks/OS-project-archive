@@ -42,6 +42,36 @@ bool expand_path(char* dst, const char* path, size_t size) {
     }
 }
 
+/* Equivalent to parse_dir, except
+ * 1. We return a bool indicating whether the path refers to a directory
+ * 2. We modify dst so it points to the the second to last element of the path
+ * Examples:
+ * struct dir* dir; 
+ * file_is_dir("/home/tim/somefile.c", &dir);
+ * -> false
+ * dir points to /home/tim directory
+ * file_is_dir("/home/tim/somedirectory", &dir);
+ * -> true
+ * dir points to /home/tim
+ */
+bool file_is_dir(char* path, struct dir** dst) {
+    char name[NAME_MAX+1];
+    struct dir* dir;
+    
+    if (is_absolute(path)) {
+        dir = dir_open_root();
+    } else {
+        dir = get_cwd();
+    }
+    
+    struct dir* parent;
+    *dst = traverse(dir_get_inode(dir), path, &parent, name, true);
+
+    struct inode* inode;
+    dir_lookup(*dst, name, &inode);
+    return inode->data.isdir;
+}
+
 /* Returns the directory the file is located in, storing the parsed
  * name of the file in NAME */
 static struct dir* parse_dir(const char* path, char name[NAME_MAX + 1]) {
