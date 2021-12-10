@@ -230,8 +230,23 @@ static bool handle_create(char* file, unsigned size) {
 }
 
 static bool handle_remove(char* file) {
-  lock_acquire(&filesys_lock);
-  bool success = filesys_remove(file);
+  struct dir* location;
+  bool success = false;
+  char name[NAME_MAX+1];
+  lock_acquire(&filesys_lock); // TODO: remove global filesys lock
+
+  bool is_dir = file_is_dir(file, &location, name);
+  if (is_dir) {
+    struct inode* inode;
+    dir_lookup(location, name, &inode);
+    if (inode_is_empty(inode)) {
+      inode_set_removed(inode);
+      success = dir_remove(location, name);
+      // TODO: remove from active_dirs and free data
+    }
+  } else {
+    success = filesys_remove(file);
+  }
   lock_release(&filesys_lock);
   return success;
 }
