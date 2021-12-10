@@ -302,17 +302,20 @@ static bool handle_chdir(const char* path) {
   struct process* pcb = thread_current()->pcb;
   struct dir* parent = pcb->cwd;
   struct dir* new_cwd;
+  struct inode* inode;
+  char name[NAME_MAX + 1];
 
   // traverse to find directory specified by path
   if (is_absolute(path)) {
-    new_cwd = traverse(inode_open(ROOT_DIR_SECTOR), path, &parent, NULL, false);
+    new_cwd = traverse(inode_open(ROOT_DIR_SECTOR), path, &parent, name, true);
   } else {
     // TODO: handle "../" relative paths
-    new_cwd = traverse(dir_get_inode(parent), path, &parent, NULL, false);
+    new_cwd = traverse(dir_get_inode(parent), path, &parent, name, true);
   }
 
-  if (new_cwd != NULL) { // found target directory
+  if (dir_lookup(new_cwd, name, &inode)) { // found target directory
     // TODO: should translate relative paths to absolute before storing
+    new_cwd = traverse(dir_get_inode(new_cwd), name, &parent, NULL, false);
     strlcpy(pcb->cwd_name, path, MAX_DIR_LEN); 
     pcb->cwd = new_cwd;
     pcb->cwd_parent = parent;
