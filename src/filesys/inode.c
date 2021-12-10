@@ -324,8 +324,12 @@ bool inode_is_dir(struct inode* inode) {
 /* returns true if the first direct pointer is null,
  * i.e. the file/directory contains no data
  */ 
-bool inode_isempty(struct inode* inode) {
+bool inode_is_empty(struct inode* inode) {
   return !inode->data.direct_ptr[0];
+}
+
+void inode_set_removed(struct inode* inode) {
+  inode->removed = true;
 }
 
 /* Closes INODE and writes it to disk.
