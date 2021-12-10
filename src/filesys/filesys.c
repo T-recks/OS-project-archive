@@ -66,6 +66,9 @@ bool file_is_dir(char* path, struct dir** dst, char name[NAME_MAX+1]) {
     struct dir* parent;
     *dst = traverse(dir_get_inode(dir), path, &parent, name, true);
 
+    if (!strcmp(path, "/")) {
+      return true;
+    }
     struct inode* inode;
     dir_lookup(*dst, name, &inode);
     return inode_is_dir(inode);
