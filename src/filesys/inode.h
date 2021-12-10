@@ -32,6 +32,7 @@ struct inode* inode_reopen(struct inode*);
 block_sector_t inode_get_inumber(const struct inode*);
 bool inode_is_dir(struct inode*);
 bool inode_is_empty(struct inode*);
+void inode_set_removed(struct inode*);
 void inode_close(struct inode*);
 void inode_remove(struct inode*);
 off_t inode_read_at(struct inode*, void*, off_t size, off_t offset);
