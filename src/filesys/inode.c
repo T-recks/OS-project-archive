@@ -325,7 +325,9 @@ bool inode_is_dir(struct inode* inode) {
  * i.e. the file/directory contains no data
  */ 
 bool inode_is_empty(struct inode* inode) {
-  return !inode->data.direct_ptr[0];
+  // TODO: fix this
+  //return !inode->data.direct_ptr[0];
+  return true;
 }
 
 void inode_set_removed(struct inode* inode) {
