@@ -54,8 +54,7 @@ bool expand_path(char* dst, const char* path, size_t size) {
  * -> true
  * dir points to /home/tim
  */
-bool file_is_dir(char* path, struct dir** dst) {
-    char name[NAME_MAX+1];
+bool file_is_dir(char* path, struct dir** dst, char name[NAME_MAX+1]) {
     struct dir* dir;
     
     if (is_absolute(path)) {
@@ -69,7 +68,7 @@ bool file_is_dir(char* path, struct dir** dst) {
 
     struct inode* inode;
     dir_lookup(*dst, name, &inode);
-    return inode->data.isdir;
+    return inode_is_dir(inode);
 }
 
 /* Returns the directory the file is located in, storing the parsed

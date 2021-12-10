@@ -4,7 +4,6 @@
 #include <stdbool.h>
 #include "filesys/off_t.h"
 #include <stddef.h>
-#include "filesys/inode.h"
 #include "filesys/directory.h"
 
 /* Sectors of system file inodes. */
@@ -22,6 +21,6 @@ bool filesys_remove(const char* name);
 bool is_absolute(const char* path);
 bool parent_path(const char* path);
 bool expand_path(char* dst, const char* path, size_t size);
-bool file_is_dir(char* path, struct dir** dst);
+bool file_is_dir(char* path, struct dir** dst, char name[NAME_MAX+1]);
 
 #endif /* filesys/filesys.h */
