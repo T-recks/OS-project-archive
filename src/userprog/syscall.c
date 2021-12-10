@@ -239,7 +239,7 @@ static bool handle_remove(char* file) {
   if (is_dir) {
     struct inode* inode;
     dir_lookup(location, name, &inode);
-    if (inode_is_empty(inode)) {
+    if (dir_is_empty(dir_open(inode))) {
       inode_set_removed(inode);
       success = dir_remove(location, name);
       // TODO: remove from active_dirs and free data
