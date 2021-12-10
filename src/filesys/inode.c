@@ -12,19 +12,6 @@
 /* Identifies an inode. */
 #define INODE_MAGIC 0x494e4f44
 
-#define NUM_DIR_PTR 123
-
-/* On-disk inode.
-   Must be exactly BLOCK_SECTOR_SIZE bytes long. */
-struct inode_disk {
-  off_t length;   /* File size in bytes. */
-  unsigned magic; /* Magic number. */
-  bool isdir;     /* True if a directory, otherwise it's a file */
-  block_sector_t direct_ptr[NUM_DIR_PTR];
-  block_sector_t ind_ptr;     /* points to 128 data blocks */
-  block_sector_t dbl_ind_ptr; /* points to 16384 data blocks */
-};
-
 file_buffer_t* f_buffer;
 
 bool clock_algorithm(block_sector_t sector_addr, file_cache_block_t** block);
@@ -33,16 +20,6 @@ void advance_hand(void);
 /* Returns the number of sectors to allocate for an inode SIZE
    bytes long. */
 static inline size_t bytes_to_sectors(off_t size) { return DIV_ROUND_UP(size, BLOCK_SECTOR_SIZE); }
-
-/* In-memory inode. */
-struct inode {
-  struct list_elem elem;  /* Element in inode list. */
-  block_sector_t sector;  /* Sector number of disk location. */
-  int open_cnt;           /* Number of openers. */
-  bool removed;           /* True if deleted, false otherwise. */
-  int deny_write_cnt;     /* 0: writes ok, >0: deny writes. */
-  struct inode_disk data; /* Inode content. */
-};
 
 /* Returns the block device sector that contains byte offset POS
    within INODE.

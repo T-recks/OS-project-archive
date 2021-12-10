@@ -4,10 +4,33 @@
 #include <stdbool.h>
 #include "filesys/off_t.h"
 #include "devices/block.h"
+#include <list.h>
 
 #define BUFFER_LEN 64
+#define NUM_DIR_PTR 123
 
 struct bitmap;
+
+/* On-disk inode.
+   Must be exactly BLOCK_SECTOR_SIZE bytes long. */
+struct inode_disk {
+  off_t length;   /* File size in bytes. */
+  unsigned magic; /* Magic number. */
+  bool isdir;     /* True if a directory, otherwise it's a file */
+  block_sector_t direct_ptr[NUM_DIR_PTR];
+  block_sector_t ind_ptr;     /* points to 128 data blocks */
+  block_sector_t dbl_ind_ptr; /* points to 16384 data blocks */
+};
+
+/* In-memory inode. */
+struct inode {
+  struct list_elem elem;  /* Element in inode list. */
+  block_sector_t sector;  /* Sector number of disk location. */
+  int open_cnt;           /* Number of openers. */
+  bool removed;           /* True if deleted, false otherwise. */
+  int deny_write_cnt;     /* 0: writes ok, >0: deny writes. */
+  struct inode_disk data; /* Inode content. */
+};
 
 typedef struct file_cache_block {
   block_sector_t sector;     // disk sector address cached by this block, 512B
