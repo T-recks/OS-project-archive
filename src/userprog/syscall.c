@@ -454,12 +454,17 @@ static bool handle_isdir(int fd) {
 }
 
 static int handle_inumber(int fd) {
+
+  // TODO: Does not work!
   struct list* fd_table = thread_current()->pcb->open_files;
   struct file_data* file = find_file(fd, fd_table);
-  if (file->file != NULL) {
+  if (file != NULL && file->file != NULL) {
     return inode_get_inumber(file_get_inode(file->file));
   } else {
-    return inode_get_inumber(dir_get_inode(file->dir));
+    file = find_dir(fd, fd_table);
+    if (file != NULL && file->dir != NULL) {
+      return inode_get_inumber(dir_get_inode(file->dir));
+    }
   }
   return false;
 }
