@@ -220,10 +220,13 @@ static int handle_wait(pid_t pid) {
 }
 
 static bool handle_create(char* file, unsigned size) {
+  struct dir* temp;
+  char name[NAME_MAX+1];
+  
   if (strlen(file) > NAME_MAX) {
     return false;
   }
-  if (file_is_dir(file, NULL, NULL)) { // a directory wit this name already exists
+  if (file_is_dir(file, &temp, name)) { // a directory wit this name already exists
     return false;
   }
   lock_acquire(&filesys_lock);
