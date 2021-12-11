@@ -376,7 +376,7 @@ static bool handle_mkdir(const char* dir) {
   return true;
 }
 
-static bool handle_readdir(int fd, char* name) {
+static bool handle_readdir(int fd UNUSED, char* name UNUSED) {
   //  struct list* dirs = &(thread_current()->pcb->active_dirs);
   //
   //  for (struct list_elem* e = list_begin(dirs); e != list_end(dirs); e = list_next(e)) {
