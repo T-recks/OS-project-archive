@@ -152,7 +152,9 @@ bool filesys_create(const char* name, off_t initial_size) {
    or if an internal memory allocation fails. */
 struct file* filesys_open(const char* name) {
   char relative_name[NAME_MAX + 1];
-  struct dir* dir = parse_dir(name, relative_name);
+  struct dir* dir;
+  //struct dir* dir = parse_dir(name, relative_name);
+  bool is_dir = file_is_dir(name, &dir, relative_name);
   struct inode* inode = NULL;
 
   if (dir != NULL)
@@ -162,7 +164,17 @@ struct file* filesys_open(const char* name) {
     // Don't want to close the process' CWD
     dir_close(dir);
   }
-  return file_open(inode);
+
+  //struct file_data* fd_entry = (struct file_data*)malloc(sizeof(struct file_data));
+  struct file_data* fd_entry;
+
+  if (is_dir) {
+    fd_entry->dir = dir_open(inode);
+  } else {
+    fd_entry->file = file_open(inode);
+  }
+
+  return fd_entry->file;
 }
 
 /* Deletes the file named NAME.
