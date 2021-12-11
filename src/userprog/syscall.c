@@ -226,9 +226,9 @@ static bool handle_create(char* file, unsigned size) {
   if (strlen(file) > NAME_MAX) {
     return false;
   }
-  if (file_is_dir(file, &temp, name)) { // a directory wit this name already exists
-    return false;
-  }
+  /* if (file_is_dir(file, &temp, name)) { // a directory wit this name already exists */
+  /*   return false; */
+  /* } */
   lock_acquire(&filesys_lock);
   bool success = filesys_create(file, size);
   lock_release(&filesys_lock);
