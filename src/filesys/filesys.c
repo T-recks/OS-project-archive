@@ -47,12 +47,14 @@ bool expand_path(char* dst, const char* path, size_t size) {
  * 2. We modify dst so it points to the the second to last element of the path
  * Examples:
  * struct dir* dir; 
- * file_is_dir("/home/tim/somefile.c", &dir);
+ * file_is_dir("/home/tim/somefile.c", &dir, name);
  * -> false
- * dir points to /home/tim directory
- * file_is_dir("/home/tim/somedirectory", &dir);
+ * dir points to /home/tim directory, name=="somefile.c"
+ * file_is_dir("/home/tim/somedirectory", &dir, name);
  * -> true
- * dir points to /home/tim
+ * dir points to /home/tim, name=="somedirectory"
+ * file_is_dir("/home/tim/doesnotexist.txt", &dir);
+ * -> false
  */
 bool file_is_dir(char* path, struct dir** dst, char name[NAME_MAX+1]) {
     struct dir* dir;
@@ -71,7 +73,11 @@ bool file_is_dir(char* path, struct dir** dst, char name[NAME_MAX+1]) {
     }
     struct inode* inode;
     dir_lookup(*dst, name, &inode);
-    return inode_is_dir(inode);
+    if (inode != NULL) { // found target file/dir
+      return inode_is_dir(inode);
+    } else { // no such file/dir
+      return false;
+    }
 }
 
 /* Returns the directory the file is located in, storing the parsed

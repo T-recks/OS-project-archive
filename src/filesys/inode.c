@@ -317,6 +317,7 @@ struct inode* inode_reopen(struct inode* inode) {
 block_sector_t inode_get_inumber(const struct inode* inode) { return inode->sector; }
 
 bool inode_is_dir(struct inode* inode) {
+  assert(inode != NULL);
   // TODO: get this from cache
   return inode->data.isdir;
 }
