@@ -159,9 +159,15 @@ static int handle_open(char* filename) {
 
     struct inode* new_inode;
 
+    // when filename is '/', the parent is a garbage value
     if (!dir_lookup(parent, name, &new_inode)) {
-      lock_release(&filesys_lock);
-      return -1;
+      if (strcmp(filename, "/") == 0) {
+        // at root, does not have parent
+        new_inode = inode_open(ROOT_DIR_SECTOR);
+      } else {
+        lock_release(&filesys_lock);
+        return -1;
+      }
     }
 
     struct dir* new_dir = dir_open(new_inode);
@@ -420,16 +426,16 @@ static bool handle_mkdir(const char* dir) {
 }
 
 static bool handle_readdir(int fd UNUSED, char* name UNUSED) {
-  //  struct list* dirs = &(thread_current()->pcb->active_dirs);
-  //
-  //  for (struct list_elem* e = list_begin(dirs); e != list_end(dirs); e = list_next(e)) {
-  //    struct dir_data* d = list_entry(e, struct dir_data, elem);
-  //    if (fd == d->fd) {
-  //        struct dir* dir = dir_open(d->dir->inode);
-  //        bool success = dir_readdir(dir, name);
-  //        return success;
-  //    }
-  //  }
+  struct list* fd_table = thread_current()->pcb->open_files;
+
+  for (struct list_elem* e = list_begin(fd_table); e != list_end(fd_table); e = list_next(e)) {
+    struct file_data* d = list_entry(e, struct file_data, elem);
+    if (fd == d->fd) {
+      struct dir* dir = d->dir;
+      bool success = dir_readdir(dir, name);
+      return success;
+    }
+  }
 
   return false;
 }
