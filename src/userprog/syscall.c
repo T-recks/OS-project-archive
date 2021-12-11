@@ -138,16 +138,55 @@ static int handle_open(char* filename) {
   struct list* fd_table = thread_current()->pcb->open_files;
   lock_acquire(&filesys_lock);
   // call filesys_open, if get NULL then handle failed open
-  // TODO: files in different directories with different names
+  // files in different directories with different names
+
   struct file* new_file = filesys_open(filename);
   if (new_file == NULL) {
+    // could not find file
+    // check for dir
+    struct dir* parent = thread_current()->pcb->cwd;
+    char name[NAME_MAX + 1];
+    struct dir* temp;
+
+    //  strlcpy(name, dir, strlen(dir) + 1);
+    if (is_absolute(filename)) {
+      // Traverse the directory tree from the root
+      temp = traverse(inode_open(ROOT_DIR_SECTOR), filename, &parent, name, true);
+    } else {
+      // Traverse the directory tree from CWD
+      temp = traverse(dir_get_inode(parent), filename, &parent, name, true);
+    }
+
+    struct inode* new_inode;
+
+    if (!dir_lookup(parent, name, &new_inode)) {
+      lock_release(&filesys_lock);
+      return -1;
+    }
+
+    struct dir* new_dir = dir_open(new_inode);
+    struct file_data* fd_entry = (struct file_data*)malloc(sizeof(struct file_data));
+    fd_entry->dir = new_dir;
+    fd_entry->file = NULL;
+    fd_entry->filename = (char*)name;
+    fd_entry->ref_cnt = 1;
+    if (!list_empty(fd_table)) {
+      struct list_elem* e = list_back(fd_table);
+      struct file_data* f = list_entry(e, struct file_data, elem);
+      fd_entry->fd = f->fd + 1;
+    } else {
+      fd_entry->fd = 3;
+    }
+    list_push_back(fd_table, &fd_entry->elem);
+    free(temp);
     lock_release(&filesys_lock);
-    return -1;
+    return fd_entry->fd;
   }
 
   // create a new fd table entry
   struct file_data* fd_entry = (struct file_data*)malloc(sizeof(struct file_data));
   fd_entry->file = new_file;
+  fd_entry->dir = NULL;
   fd_entry->filename = filename;
   fd_entry->ref_cnt = 1;
   if (!list_empty(fd_table)) {
@@ -221,8 +260,8 @@ static int handle_wait(pid_t pid) {
 
 static bool handle_create(char* file, unsigned size) {
   struct dir* temp;
-  char name[NAME_MAX+1];
-  
+  char name[NAME_MAX + 1];
+
   if (strlen(file) > NAME_MAX) {
     return false;
   }
@@ -236,10 +275,11 @@ static bool handle_create(char* file, unsigned size) {
 }
 
 static bool handle_remove(char* file) {
-  if (!strcmp(file, "/")) return false; // never remove root
+  if (!strcmp(file, "/"))
+    return false; // never remove root
   struct dir* location;
   bool success = false;
-  char name[NAME_MAX+1];
+  char name[NAME_MAX + 1];
   lock_acquire(&filesys_lock); // TODO: remove global filesys lock
 
   bool is_dir = file_is_dir(file, &location, name);
@@ -323,7 +363,7 @@ static bool handle_chdir(const char* path) {
   if (dir_lookup(new_cwd, name, &inode)) { // found target directory
     // TODO: should translate relative paths to absolute before storing
     new_cwd = traverse(dir_get_inode(new_cwd), name, &parent, NULL, false);
-    strlcpy(pcb->cwd_name, path, MAX_DIR_LEN); 
+    strlcpy(pcb->cwd_name, path, MAX_DIR_LEN);
     pcb->cwd = new_cwd;
     pcb->cwd_parent = parent;
     return true;
@@ -337,7 +377,7 @@ static bool handle_mkdir(const char* dir) {
   bool success;
   char name[NAME_MAX + 1];
   struct dir* temp;
-  
+
   //  strlcpy(name, dir, strlen(dir) + 1);
   if (is_absolute(dir)) {
     // Traverse the directory tree from the root
@@ -350,7 +390,7 @@ static bool handle_mkdir(const char* dir) {
   // Create the new directory in the parent directory
   struct inode* new_inode;
   block_sector_t new_sector;
-  success = free_map_allocate(1, &new_sector);    // Allocate the new sector
+  success = free_map_allocate(1, &new_sector);               // Allocate the new sector
   success = success && dir_create(new_sector, 16);           // Create the new directory
   success = success && dir_add(parent, name, new_sector);    // Add directory to parent
   success = success && dir_lookup(parent, name, &new_inode); // Get the new inode
