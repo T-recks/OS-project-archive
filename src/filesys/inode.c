@@ -9,31 +9,6 @@
 #include "threads/malloc.h"
 #include "threads/synch.h"
 
-/* Identifies an inode. */
-#define INODE_MAGIC 0x494e4f44
-#define NUM_DIR_PTR 123
-
-/* On-disk inode.
-   Must be exactly BLOCK_SECTOR_SIZE bytes long. */
-struct inode_disk {
-  off_t length;   /* File size in bytes. */
-  unsigned magic; /* Magic number. */
-  bool isdir;     /* True if a directory, otherwise it's a file */
-  block_sector_t direct_ptr[NUM_DIR_PTR];
-  block_sector_t ind_ptr;     /* points to 128 data blocks */
-  block_sector_t dbl_ind_ptr; /* points to 16384 data blocks */
-};
-
-/* In-memory inode. */
-struct inode {
-  struct list_elem elem;  /* Element in inode list. */
-  block_sector_t sector;  /* Sector number of disk location. */
-  int open_cnt;           /* Number of openers. */
-  bool removed;           /* True if deleted, false otherwise. */
-  int deny_write_cnt;     /* 0: writes ok, >0: deny writes. */
-  struct inode_disk data; /* Inode content. */
-};
-
 file_buffer_t* f_buffer;
 
 bool clock_algorithm(block_sector_t sector_addr, file_cache_block_t** block);
@@ -324,16 +299,14 @@ bool inode_is_dir(struct inode* inode) {
 
 /* returns true if the first direct pointer is null,
  * i.e. the file/directory contains no data
- */ 
+ */
 bool inode_is_empty(struct inode* inode) {
   // TODO: fix this
   //return !inode->data.direct_ptr[0];
   return true;
 }
 
-void inode_set_removed(struct inode* inode) {
-  inode->removed = true;
-}
+void inode_set_removed(struct inode* inode) { inode->removed = true; }
 
 /* Closes INODE and writes it to disk.
    If this was the last reference to INODE, frees its memory.

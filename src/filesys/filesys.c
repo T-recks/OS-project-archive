@@ -31,15 +31,15 @@ bool parent_path(const char* path) { return strlen(path) >= 2 && path[0] == '.' 
  * enough to store the full path.
  */
 bool expand_path(char* dst, const char* path, size_t size) {
-    if (is_absolute(path)) {
-        return false;
-    } else {
-        char* cwd = thread_current()->pcb->cwd_name;
-        strlcpy(dst, cwd, strlen(cwd)); // copy cwd
-        strlcat(dst, "/", 1); // append "/"
-        strlcat(dst, path, size); // append path
-        return true;
-    }
+  if (is_absolute(path)) {
+    return false;
+  } else {
+    char* cwd = thread_current()->pcb->cwd_name;
+    strlcpy(dst, cwd, strlen(cwd)); // copy cwd
+    strlcat(dst, "/", 1);           // append "/"
+    strlcat(dst, path, size);       // append path
+    return true;
+  }
 }
 
 /* Equivalent to parse_dir, except
@@ -56,28 +56,28 @@ bool expand_path(char* dst, const char* path, size_t size) {
  * file_is_dir("/home/tim/doesnotexist.txt", &dir);
  * -> false
  */
-bool file_is_dir(char* path, struct dir** dst, char name[NAME_MAX+1]) {
-    struct dir* dir;
-    
-    if (is_absolute(path)) {
-        dir = dir_open_root();
-    } else {
-        dir = get_cwd();
-    }
-    
-    struct dir* parent;
-    *dst = traverse(dir_get_inode(dir), path, &parent, name, true);
+bool file_is_dir(char* path, struct dir** dst, char name[NAME_MAX + 1]) {
+  struct dir* dir;
 
-    if (!strcmp(path, "/")) {
-      return true;
-    }
-    struct inode* inode;
-    dir_lookup(*dst, name, &inode);
-    if (inode != NULL) { // found target file/dir
-      return inode_is_dir(inode);
-    } else { // no such file/dir
-      return false;
-    }
+  if (is_absolute(path)) {
+    dir = dir_open_root();
+  } else {
+    dir = get_cwd();
+  }
+
+  struct dir* parent;
+  *dst = traverse(dir_get_inode(dir), path, &parent, name, true);
+
+  if (!strcmp(path, "/")) {
+    return true;
+  }
+  struct inode* inode;
+  dir_lookup(*dst, name, &inode);
+  if (inode != NULL) { // found target file/dir
+    return inode_is_dir(inode);
+  } else { // no such file/dir
+    return false;
+  }
 }
 
 /* Returns the directory the file is located in, storing the parsed

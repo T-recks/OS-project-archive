@@ -292,14 +292,31 @@ static bool handle_remove(char* file) {
   if (is_dir) {
     struct inode* inode;
     dir_lookup(location, name, &inode);
-    if (dir_is_empty(dir_open(inode))) {
+
+    struct inode* cwd_inode = dir_get_inode(thread_current()->pcb->cwd);
+    if (inode == NULL || inode->sector == cwd_inode->sector) {
+      success = false;
+
+    } else if (dir_is_empty(dir_open(inode))) {
       inode_set_removed(inode);
       success = dir_remove(location, name);
-      // TODO: remove from active_dirs and free data
+
+      if (success) {
+        struct list* fd_table = thread_current()->pcb->open_files;
+        struct list_elem* e;
+        for (e = list_begin(fd_table); e != list_end(fd_table); e = list_next(e)) {
+          struct file_data* f = list_entry(e, struct file_data, elem);
+          if (strcmp(f->filename, file) == 0) {
+            // TODO: free data
+            list_remove(e);
+          }
+        }
+      }
     }
   } else {
     success = filesys_remove(file);
   }
+
   lock_release(&filesys_lock);
   return success;
 }
