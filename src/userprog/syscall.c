@@ -422,8 +422,11 @@ static bool handle_mkdir(const char* dir) {
     return false;
   }
 
-  // Add the directory to the list of open files
   struct dir* new_dir = dir_open(new_inode);
+  dir_add(new_dir, ".", new_sector);
+  dir_add(new_dir, "..", parent->inode->sector);
+
+  // Add the directory to the list of open files
   struct list* fd_table = thread_current()->pcb->open_files;
   struct file_data* fd_entry = (struct file_data*)malloc(sizeof(struct file_data));
   fd_entry->dir = new_dir;

@@ -6,12 +6,6 @@
 #include "filesys/inode.h"
 #include "threads/malloc.h"
 
-/* A directory. */
-struct dir {
-  struct inode* inode; /* Backing store. */
-  off_t pos;           /* Current position. */
-};
-
 /* A single directory entry. */
 struct dir_entry {
   block_sector_t inode_sector; /* Sector number of header. */
@@ -70,13 +64,12 @@ struct inode* dir_get_inode(struct dir* dir) {
 block_sector_t dir_get_sector(struct dir* dir) { return inode_get_inumber(dir->inode); }
 
 struct dir_entry* dir_get_parent(struct dir* dir) {
-  struct dir_entry e;
-  size_t ofs;
+  struct dir_entry* ep;
+  off_t* ofsp;
 
-  for (ofs = 0; inode_read_at(dir->inode, &e, sizeof e, ofs) == sizeof e; ofs += sizeof e)
-    if (e.in_use && e.parent != NULL && e.parent->parent != NULL) {
-      return e.parent->parent;
-    }
+  if (lookup(dir, "..", ep, ofsp)) {
+    return ep;
+  }
   return NULL;
 }
 
@@ -159,13 +152,6 @@ bool dir_add(struct dir* dir, const char* name, block_sector_t inode_sector) {
   strlcpy(e.name, name, sizeof e.name);
   e.inode_sector = inode_sector;
   success = inode_write_at(dir->inode, &e, sizeof e, ofs) == sizeof e;
-
-  // Initialize "." and ".." pointers
-  struct dir_entry parent;
-  inode_read_at(dir->inode, &parent, sizeof e, 0);
-  e.loc = &e;
-  e.parent = &parent;
-
 done:
   return success;
 }
@@ -213,7 +199,7 @@ bool dir_readdir(struct dir* dir, char name[NAME_MAX + 1]) {
 
   while (inode_read_at(dir->inode, &e, sizeof e, dir->pos) == sizeof e) {
     dir->pos += sizeof e;
-    if (e.in_use) {
+    if (e.in_use && strcmp(e.name,".") && strcmp(e.name,"..")) {
       strlcpy(name, e.name, NAME_MAX + 1);
       return true;
     }
@@ -293,7 +279,7 @@ bool dir_is_empty(const struct dir* dir) {
 
   // Search dir for an active entry and return false only if we find one
   for (ofs = 0; inode_read_at(dir->inode, &e, sizeof e, ofs) == sizeof e; ofs += sizeof e) {
-      if (e.in_use) {
+      if (e.in_use && strcmp(e.name,".") && strcmp(e.name,"..")) {
         return false;
       }
   }
