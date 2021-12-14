@@ -88,10 +88,10 @@ static struct dir* parse_dir(const char* path, char name[NAME_MAX + 1]) {
     dir = dir_open_root();
   } else {
     dir = get_cwd();
-    if (parent_path(name)) {
-      // TODO: get the dir struct of the parent
-      // dir =
-    }
+    // if (parent_path(name)) {
+    //   // TODO: get the dir struct of the parent
+    //   // dir =
+    // }
   }
 
   struct dir* parent;
