@@ -128,6 +128,12 @@ struct file* filesys_open(const char* name) {
 }
 
 struct inode* filesys_get_inode(const char* name) {
+  if (strcmp(name, "/") == 0) {
+    return dir_get_inode(dir_open_root());
+  }
+  if (strcmp(name, ".") == 0) {
+    return dir_get_inode(get_cwd());
+  }
   char relative_name[NAME_MAX + 1];
   struct dir* dir = parse_dir(name, relative_name);
   struct inode* inode = NULL;
@@ -149,6 +155,7 @@ struct inode* filesys_get_inode(const char* name) {
 bool filesys_remove(const char* name) {
   char relative_name[NAME_MAX + 1];
   struct dir* dir = parse_dir(name, relative_name);
+
   bool success = dir != NULL && dir_remove(dir, relative_name);
 
   if (dir_get_inode(dir) != dir_get_inode(get_cwd())) {

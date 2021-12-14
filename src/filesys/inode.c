@@ -317,6 +317,8 @@ struct inode* inode_reopen(struct inode* inode) {
 /* Returns INODE's inode number. */
 block_sector_t inode_get_inumber(const struct inode* inode) { return inode->sector; }
 
+block_sector_t inode_open_cnt(const struct inode* inode) { return inode->open_cnt; }
+
 bool inode_is_dir(struct inode* inode) {
   // TODO: get this from cache
   return inode->data.isdir;

@@ -5,6 +5,8 @@
 #include "filesys/filesys.h"
 #include "filesys/inode.h"
 #include "threads/malloc.h"
+#include "threads/thread.h"
+#include "userprog/process.h"
 
 /* A directory. */
 struct dir {
@@ -188,9 +190,11 @@ bool dir_remove(struct dir* dir, const char* name) {
 
   /* Open inode. */
   inode = inode_open(e.inode_sector);
-  if (inode == NULL)
+  if (inode == NULL || inode == thread_current()->pcb->cwd->inode || inode_open_cnt(inode) > 4)
     goto done;
 
+  if (inode_is_dir(inode) && !dir_is_empty(inode))
+    goto done;
   /* Erase directory entry. */
   e.in_use = false;
   if (inode_write_at(dir->inode, &e, sizeof e, ofs) != sizeof e)
@@ -267,14 +271,15 @@ struct dir* traverse(struct inode* inode, const char* path, struct dir* parent,
 
   get_next_part(next_part, &path);
   while ((success = dir_lookup(d, next_part, &next_inode))) {
+    if (get_s2l && strlen(path) == 0) {
+      strlcpy(name, next_part, strlen(next_part) + 1);
+      return d;
+    }
     get_next_part(next_part, &path);
     if (name != NULL) {
       strlcpy(name, next_part, strlen(next_part) + 1);
     }
     if (inode_is_dir(next_inode)) {
-      if (get_s2l && strlen(path) == 0) {
-        return d;
-      }
       if (!get_s2l)
         parent->inode = d->inode;
       d->inode = next_inode;
@@ -282,7 +287,25 @@ struct dir* traverse(struct inode* inode, const char* path, struct dir* parent,
     } else {
       return d;
     }
+    if (get_s2l && strlen(path) == 0) {
+      return d;
+    }
   }
 
   return d;
+}
+
+/* Return true if dir contains no active entries.
+ */
+bool dir_is_empty(const struct inode* inode) {
+  struct dir_entry e;
+  size_t ofs;
+
+  // Search dir for an active entry and return false only if we find one
+  for (ofs = 0; inode_read_at(inode, &e, sizeof e, ofs) == sizeof e; ofs += sizeof e) {
+    if (e.in_use && strcmp(e.name, ".") && strcmp(e.name, "..")) {
+      return false;
+    }
+  }
+  return true;
 }
