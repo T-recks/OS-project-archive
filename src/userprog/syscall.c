@@ -294,7 +294,7 @@ static bool handle_remove(char* file) {
     dir_lookup(location, name, &inode);
 
     struct inode* cwd_inode = dir_get_inode(thread_current()->pcb->cwd);
-    if (inode == NULL) {
+    if (inode == NULL || inode->open_cnt > 2) {
       success = false;
 
     } else if (dir_is_empty(dir_open(inode))) {
@@ -423,25 +423,27 @@ static bool handle_mkdir(const char* dir) {
   }
 
   struct dir* new_dir = dir_open(new_inode);
-  dir_add(new_dir, ".", new_sector);
-  dir_add(new_dir, "..", parent->inode->sector);
+  block_sector_t dot_sector;
+  block_sector_t dot_dot_sector;
+  success = (free_map_allocate(1, &dot_sector), free_map_allocate(1, &dot_dot_sector),
+             dir_add(new_dir, ".", dot_sector), dir_add(new_dir, "..", dot_dot_sector));
 
   // Add the directory to the list of open files
-  struct list* fd_table = thread_current()->pcb->open_files;
-  struct file_data* fd_entry = (struct file_data*)malloc(sizeof(struct file_data));
-  fd_entry->dir = new_dir;
-  fd_entry->file = NULL;
-  fd_entry->filename = (char*)name;
-  fd_entry->ref_cnt = 1;
-  if (!list_empty(fd_table)) {
-    struct list_elem* e = list_back(fd_table);
-    struct file_data* f = list_entry(e, struct file_data, elem);
-    fd_entry->fd = f->fd + 1;
-  } else {
-    fd_entry->fd = 3;
-  }
-  list_push_back(fd_table, &fd_entry->elem);
-  free(temp);
+  //  struct list* fd_table = thread_current()->pcb->open_files;
+  //  struct file_data* fd_entry = (struct file_data*)malloc(sizeof(struct file_data));
+  //  fd_entry->dir = new_dir;
+  //  fd_entry->file = NULL;
+  //  fd_entry->filename = (char*)name;
+  //  fd_entry->ref_cnt = 1;
+  //  if (!list_empty(fd_table)) {
+  //    struct list_elem* e = list_back(fd_table);
+  //    struct file_data* f = list_entry(e, struct file_data, elem);
+  //    fd_entry->fd = f->fd + 1;
+  //  } else {
+  //    fd_entry->fd = 3;
+  //  }
+  //  list_push_back(fd_table, &fd_entry->elem);
+  //  free(temp);
   return true;
 }
 
