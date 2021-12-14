@@ -141,70 +141,44 @@ static int handle_open(char* filename) {
   // files in different directories with different names
 
   struct file* new_file = filesys_open(filename);
-  if (new_file == NULL) {
-    // could not find file
-    // check for dir
-    struct dir* parent = thread_current()->pcb->cwd;
-    char name[NAME_MAX + 1];
-    struct dir* temp;
-
-    //  strlcpy(name, dir, strlen(dir) + 1);
-    if (is_absolute(filename)) {
-      // Traverse the directory tree from the root
-      temp = traverse(inode_open(ROOT_DIR_SECTOR), filename, &parent, name, true);
-    } else {
-      // Traverse the directory tree from CWD
-      temp = traverse(dir_get_inode(parent), filename, &parent, name, true);
-    }
-
-    struct inode* new_inode;
-
-    // when filename is '/', the parent is a garbage value
-    if (!dir_lookup(parent, name, &new_inode)) {
-      if (strcmp(filename, "/") == 0) {
-        // at root, does not have parent
-        new_inode = inode_open(ROOT_DIR_SECTOR);
-      } else {
-        lock_release(&filesys_lock);
-        return -1;
-      }
-    }
-
-    struct dir* new_dir = dir_open(new_inode);
-    struct file_data* fd_entry = (struct file_data*)malloc(sizeof(struct file_data));
-    fd_entry->dir = new_dir;
-    fd_entry->file = NULL;
-    fd_entry->filename = (char*)name;
-    fd_entry->ref_cnt = 1;
-    if (!list_empty(fd_table)) {
-      struct list_elem* e = list_back(fd_table);
-      struct file_data* f = list_entry(e, struct file_data, elem);
-      fd_entry->fd = f->fd + 1;
-    } else {
-      fd_entry->fd = 3;
-    }
-    list_push_back(fd_table, &fd_entry->elem);
-    free(temp);
+  if (new_file) {
+    // create a new fd table entry
+    int fd = add_file_to_fd_table(fd_table, new_file, filename);
     lock_release(&filesys_lock);
-    return fd_entry->fd;
+    return fd;
   }
 
-  // create a new fd table entry
-  struct file_data* fd_entry = (struct file_data*)malloc(sizeof(struct file_data));
-  fd_entry->file = new_file;
-  fd_entry->dir = NULL;
-  fd_entry->filename = filename;
-  fd_entry->ref_cnt = 1;
-  if (!list_empty(fd_table)) {
-    struct list_elem* e = list_back(fd_table);
-    struct file_data* f = list_entry(e, struct file_data, elem);
-    fd_entry->fd = f->fd + 1;
+  // could not find file
+  // check for dir
+  struct dir* parent = thread_current()->pcb->cwd;
+  char name[NAME_MAX + 1];
+
+  //  strlcpy(name, dir, strlen(dir) + 1);
+  if (is_absolute(filename)) {
+    // Traverse the directory tree from the root
+    traverse(inode_open(ROOT_DIR_SECTOR), filename, &parent, name, true);
   } else {
-    fd_entry->fd = 3;
+    // Traverse the directory tree from CWD
+    traverse(dir_get_inode(parent), filename, &parent, name, true);
   }
-  list_push_back(fd_table, &fd_entry->elem);
+
+  struct inode* new_inode;
+
+  // when filename is '/', the parent is a garbage value
+  if (!dir_lookup(parent, name, &new_inode)) {
+    if (strcmp(filename, "/") == 0) {
+      // at root, does not have parent
+      new_inode = inode_open(ROOT_DIR_SECTOR);
+    } else {
+      lock_release(&filesys_lock);
+      return -1;
+    }
+  }
+
+  struct dir* new_dir = dir_open(new_inode);
+  int fd = add_dir_to_fd_table(fd_table, new_dir, name);
   lock_release(&filesys_lock);
-  return fd_entry->fd;
+  return fd;
 }
 
 static bool handle_close(const int fd) {

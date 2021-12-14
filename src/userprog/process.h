@@ -90,6 +90,9 @@ pid_t get_pid(struct process*);
 
 struct file_data* find_file(int fd, struct list* fd_table);
 struct file_data* find_dir(int fd, struct list* fd_table);
+int new_fd_table_entry(struct list* fd_table, struct dir* new_dir, struct file* new_file, char* name);
+int add_dir_to_fd_table(struct list* fd_table, struct dir* new_dir, char* name);
+int add_file_to_fd_table(struct list* fd_table, struct file* new_file, char* name);
 void free_process(struct process* pcb);
 
 #endif /* userprog/process.h */

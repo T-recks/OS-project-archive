@@ -666,3 +666,29 @@ struct file_data* find_dir(int fd, struct list* fd_table) {
   }
   return NULL;
 }
+
+int new_fd_table_entry(struct list* fd_table, struct dir* new_dir, struct file* new_file, char* name) {
+  struct file_data* fd_entry = (struct file_data*)malloc(sizeof(struct file_data));
+  fd_entry->dir = new_dir;
+  fd_entry->file = new_file;
+  fd_entry->filename = (char*)name;
+  fd_entry->ref_cnt = 1;
+  if (!list_empty(fd_table)) {
+    struct list_elem* e = list_back(fd_table);
+    struct file_data* f = list_entry(e, struct file_data, elem);
+    fd_entry->fd = f->fd + 1;
+  } else {
+    fd_entry->fd = 3;
+  }
+  list_push_back(fd_table, &fd_entry->elem);
+  return fd_entry->fd;
+}
+
+int add_dir_to_fd_table(struct list* fd_table, struct dir* new_dir, char* name) {
+  return new_fd_table_entry(fd_table, new_dir, NULL, name);
+}
+
+int add_file_to_fd_table(struct list* fd_table, struct file* new_file, char* name) {
+  return new_fd_table_entry(fd_table, NULL, new_file, name);
+}
+
