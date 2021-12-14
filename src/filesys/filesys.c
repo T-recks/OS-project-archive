@@ -42,28 +42,61 @@ bool expand_path(char* dst, const char* path, size_t size) {
   }
 }
 
+/* Equivalent to parse_dir, except
+ * 1. We return a bool indicating whether the path refers to a directory
+ * 2. We modify dst so it points to the the second to last element of the path
+ * Examples:
+ * struct dir* dir;
+ * file_is_dir("/home/tim/somefile.c", &dir, name);
+ * -> false
+ * dir points to /home/tim directory, name=="somefile.c"
+ * file_is_dir("/home/tim/somedirectory", &dir, name);
+ * -> true
+ * dir points to /home/tim, name=="somedirectory"
+ * file_is_dir("/home/tim/doesnotexist.txt", &dir);
+ * -> false
+ */
+bool file_is_dir(char* path, struct dir** dst, char name[NAME_MAX + 1]) {
+  struct dir* dir;
+
+  if (is_absolute(path)) {
+    dir = dir_open_root();
+  } else {
+    dir = get_cwd();
+  }
+
+  struct dir* parent;
+  *dst = traverse(dir_get_inode(dir), path, &parent, name, true);
+
+  if (!strcmp(path, "/")) {
+    return true;
+  }
+  struct inode* inode;
+  dir_lookup(*dst, name, &inode);
+  if (inode != NULL) { // found target file/dir
+    return inode_is_dir(inode);
+  } else { // no such file/dir
+    return false;
+  }
+}
+
 /* Returns the directory the file is located in, storing the parsed
  * name of the file in NAME */
-static struct dir* parse_dir(const char* path, char name[NAME_MAX + 1], bool get_parent) {
+static struct dir* parse_dir(const char* path, char name[NAME_MAX + 1]) {
   struct dir* dir;
   if (is_absolute(path)) {
     dir = dir_open_root();
   } else {
     dir = get_cwd();
-    if (parent_path(name)) {
-      // TODO: get the dir struct of the parent
-      // dir =
-    }
+    // if (parent_path(name)) {
+    //   // TODO: get the dir struct of the parent
+    //   // dir =
+    // }
   }
 
-  struct dir* parent = dir_init(dir);
-  dir = traverse(dir_get_inode(dir), path, parent, name);
-
-  if (get_parent) {
-    return parent;
-  } else {
-    return dir;
-  }
+  struct dir* parent;
+  dir = traverse(dir_get_inode(dir), path, &parent, name, false);
+  return dir;
 }
 
 /* Initializes the file system module.
@@ -97,7 +130,7 @@ void filesys_done(void) {
 bool filesys_create(const char* name, off_t initial_size) {
   block_sector_t inode_sector = 0;
   char relative_name[NAME_MAX + 1];
-  struct dir* dir = parse_dir(name, relative_name, false);
+  struct dir* dir = parse_dir(name, relative_name);
   bool success = (dir != NULL && free_map_allocate(1, &inode_sector) &&
                   inode_create(inode_sector, initial_size, false) &&
                   dir_add(dir, relative_name, inode_sector));
@@ -119,7 +152,7 @@ bool filesys_create(const char* name, off_t initial_size) {
    or if an internal memory allocation fails. */
 struct file* filesys_open(const char* name) {
   char relative_name[NAME_MAX + 1];
-  struct dir* dir = parse_dir(name, relative_name, true);
+  struct dir* dir = parse_dir(name, relative_name);
   struct inode* inode = NULL;
 
   if (dir != NULL)
@@ -132,28 +165,13 @@ struct file* filesys_open(const char* name) {
   return file_open(inode);
 }
 
-struct inode* filesys_get_inode(const char* name) {
-  char relative_name[NAME_MAX + 1];
-  struct dir* dir = parse_dir(name, relative_name, true);
-  struct inode* inode = NULL;
-
-  if (dir != NULL)
-    dir_lookup(dir, relative_name, &inode);
-
-  if (dir_get_inode(dir) != dir_get_inode(get_cwd())) {
-    // Don't want to close the process' CWD
-    dir_close(dir);
-  }
-  return inode;
-}
-
 /* Deletes the file named NAME.
    Returns true if successful, false on failure.
    Fails if no file named NAME exists,
    or if an internal memory allocation fails. */
 bool filesys_remove(const char* name) {
   char relative_name[NAME_MAX + 1];
-  struct dir* dir = parse_dir(name, relative_name, true);
+  struct dir* dir = parse_dir(name, relative_name);
   bool success = dir != NULL && dir_remove(dir, relative_name);
 
   if (dir_get_inode(dir) != dir_get_inode(get_cwd())) {

@@ -6,12 +6,6 @@
 #include "filesys/inode.h"
 #include "threads/malloc.h"
 
-/* A directory. */
-struct dir {
-  struct inode* inode; /* Backing store. */
-  off_t pos;           /* Current position. */
-};
-
 /* A single directory entry. */
 struct dir_entry {
   block_sector_t inode_sector; /* Sector number of header. */
@@ -70,13 +64,12 @@ struct inode* dir_get_inode(struct dir* dir) {
 block_sector_t dir_get_sector(struct dir* dir) { return inode_get_inumber(dir->inode); }
 
 struct dir_entry* dir_get_parent(struct dir* dir) {
-  struct dir_entry e;
-  size_t ofs;
+  struct dir_entry* ep;
+  off_t* ofsp;
 
-  for (ofs = 0; inode_read_at(dir->inode, &e, sizeof e, ofs) == sizeof e; ofs += sizeof e)
-    if (e.in_use && e.parent != NULL && e.parent->parent != NULL) {
-      return e.parent->parent;
-    }
+  if (lookup(dir, "..", ep, ofsp)) {
+    return ep;
+  }
   return NULL;
 }
 
@@ -159,13 +152,6 @@ bool dir_add(struct dir* dir, const char* name, block_sector_t inode_sector) {
   strlcpy(e.name, name, sizeof e.name);
   e.inode_sector = inode_sector;
   success = inode_write_at(dir->inode, &e, sizeof e, ofs) == sizeof e;
-
-  // Initialize "." and ".." pointers
-  struct dir_entry parent;
-  inode_read_at(dir->inode, &parent, sizeof e, 0);
-  e.loc = &e;
-  e.parent = &parent;
-
 done:
   return success;
 }
@@ -213,7 +199,7 @@ bool dir_readdir(struct dir* dir, char name[NAME_MAX + 1]) {
 
   while (inode_read_at(dir->inode, &e, sizeof e, dir->pos) == sizeof e) {
     dir->pos += sizeof e;
-    if (e.in_use) {
+    if (e.in_use && strcmp(e.name, ".") && strcmp(e.name, "..")) {
       strlcpy(name, e.name, NAME_MAX + 1);
       return true;
     }
@@ -246,14 +232,12 @@ static int get_next_part(char part[NAME_MAX + 1], const char** srcp) {
   return 1;
 }
 
-struct dir* dir_init(struct dir* dir) {
-  struct dir* d = malloc(sizeof(struct dir));
-  d->inode = dir->inode;
-  d->pos = 0;
-}
-
-struct dir* traverse(struct inode* inode, const char* path, struct dir* parent,
-                     char name[NAME_MAX + 1]) {
+/* TODO: further document this function.
+ * if stop_early==true, traverse only as far as the second to last part of path,
+ * otherwise follow the full path
+ */
+struct dir* traverse(struct inode* inode, const char* path, struct dir** parent,
+                     char name[NAME_MAX + 1], bool stop_early) {
   struct dir* d = malloc(sizeof(struct dir));
   struct inode* next_inode;
   char next_part[NAME_MAX + 1];
@@ -272,13 +256,35 @@ struct dir* traverse(struct inode* inode, const char* path, struct dir* parent,
       strlcpy(name, next_part, strlen(next_part) + 1);
     }
     if (inode_is_dir(next_inode)) {
-      parent->inode = d->inode;
-      d->inode = next_inode;
-      d->pos = 0;
+      if (!strcmp(path, "") && stop_early) {
+        return d;
+      } else {
+        *parent = d;
+        d->inode = next_inode;
+        d->pos = 0;
+      }
     } else {
       return d;
+    }
+    if (strlen(path) == 0) {
+      break;
     }
   }
 
   return d;
+}
+
+/* Return true if dir contains no active entries.
+ */
+bool dir_is_empty(const struct dir* dir) {
+  struct dir_entry e;
+  size_t ofs;
+
+  // Search dir for an active entry and return false only if we find one
+  for (ofs = 0; inode_read_at(dir->inode, &e, sizeof e, ofs) == sizeof e; ofs += sizeof e) {
+    if (e.in_use && strcmp(e.name, ".") && strcmp(e.name, "..")) {
+      return false;
+    }
+  }
+  return true;
 }

@@ -14,6 +14,12 @@
 
 struct inode;
 
+/* A directory. */
+struct dir {
+  struct inode* inode; /* Backing store. */
+  off_t pos;           /* Current position. */
+};
+
 /* Opening and closing directories. */
 bool dir_create(block_sector_t sector, size_t entry_cnt);
 struct dir* dir_open(struct inode*);
@@ -23,14 +29,15 @@ void dir_close(struct dir*);
 struct inode* dir_get_inode(struct dir*);
 block_sector_t dir_get_sector(struct dir* dir);
 struct dir_entry* dir_get_parent(struct dir* dir);
-struct dir* dir_init(struct dir*);
 
+static bool lookup(const struct dir* dir, const char* name, struct dir_entry* ep, off_t* ofsp);
 /* Reading and writing. */
 bool dir_lookup(const struct dir*, const char* name, struct inode**);
 bool dir_add(struct dir*, const char* name, block_sector_t);
 bool dir_remove(struct dir*, const char* name);
 bool dir_readdir(struct dir*, char name[NAME_MAX + 1]);
-struct dir* traverse(struct inode* inode, const char* path, struct dir* parent,
-                     char name[NAME_MAX + 1]);
+struct dir* traverse(struct inode* inode, const char* path, struct dir** parent,
+                     char name[NAME_MAX + 1], bool stop_early);
+bool dir_is_empty(const struct dir* dir);
 
 #endif /* filesys/directory.h */
