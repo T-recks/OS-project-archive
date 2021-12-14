@@ -20,5 +20,6 @@ bool filesys_remove(const char* name);
 bool is_absolute(const char* path);
 bool parent_path(const char* path);
 bool expand_path(char* dst, const char* path, size_t size);
+struct inode* filesys_get_inode(const char*);
 
 #endif /* filesys/filesys.h */

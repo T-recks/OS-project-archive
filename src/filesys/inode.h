@@ -10,19 +10,19 @@
 struct bitmap;
 
 typedef struct file_cache_block {
-  block_sector_t sector;     // disk sector address cached by this block, 512B
-  void* contents;     // contents at this sector (BLOCK_SECTOR_SIZE bytes)
-  bool dirty;                // tracks whether a write-back is required
-  bool in_use;               // track if block has been used since last considered for replacement
-  bool evicting;             // track if block is being evicted
-  bool free;                 // if this block is empty
+  block_sector_t sector;      // disk sector address cached by this block, 512B
+  void* contents;             // contents at this sector (BLOCK_SECTOR_SIZE bytes)
+  bool dirty;                 // tracks whether a write-back is required
+  bool in_use;                // track if block has been used since last considered for replacement
+  bool evicting;              // track if block is being evicted
+  bool free;                  // if this block is empty
   struct rw_lock* write_lock; // prevents any other threads from accessing while one is writing
 } file_cache_block_t;
 
 typedef struct file_buffer {
   file_cache_block_t buffer[BUFFER_LEN]; // buffer cache representation
-  uint8_t clock_hand;            // where the clock hand currently points to
-  struct lock* replacement_lock;  // prevents race conditions when cache replacement is needed
+  uint8_t clock_hand;                    // where the clock hand currently points to
+  struct lock* replacement_lock; // prevents race conditions when cache replacement is needed
 } file_buffer_t;
 
 void inode_init(void);

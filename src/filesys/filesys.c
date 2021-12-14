@@ -31,20 +31,20 @@ bool parent_path(const char* path) { return strlen(path) >= 2 && path[0] == '.' 
  * enough to store the full path.
  */
 bool expand_path(char* dst, const char* path, size_t size) {
-    if (is_absolute(path)) {
-        return false;
-    } else {
-        char* cwd = thread_current()->pcb->cwd_name;
-        strlcpy(dst, cwd, strlen(cwd)); // copy cwd
-        strlcat(dst, "/", 1); // append "/"
-        strlcat(dst, path, size); // append path
-        return true;
-    }
+  if (is_absolute(path)) {
+    return false;
+  } else {
+    char* cwd = thread_current()->pcb->cwd_name;
+    strlcpy(dst, cwd, strlen(cwd)); // copy cwd
+    strlcat(dst, "/", 1);           // append "/"
+    strlcat(dst, path, size);       // append path
+    return true;
+  }
 }
 
 /* Returns the directory the file is located in, storing the parsed
  * name of the file in NAME */
-static struct dir* parse_dir(const char* path, char name[NAME_MAX + 1]) {
+static struct dir* parse_dir(const char* path, char name[NAME_MAX + 1], bool get_parent) {
   struct dir* dir;
   if (is_absolute(path)) {
     dir = dir_open_root();
@@ -56,9 +56,14 @@ static struct dir* parse_dir(const char* path, char name[NAME_MAX + 1]) {
     }
   }
 
-  struct dir* parent;
-  dir = traverse(dir_get_inode(dir), path, &parent, name);
-  return dir;
+  struct dir* parent = dir_init(dir);
+  dir = traverse(dir_get_inode(dir), path, parent, name);
+
+  if (get_parent) {
+    return parent;
+  } else {
+    return dir;
+  }
 }
 
 /* Initializes the file system module.
@@ -92,7 +97,7 @@ void filesys_done(void) {
 bool filesys_create(const char* name, off_t initial_size) {
   block_sector_t inode_sector = 0;
   char relative_name[NAME_MAX + 1];
-  struct dir* dir = parse_dir(name, relative_name);
+  struct dir* dir = parse_dir(name, relative_name, false);
   bool success = (dir != NULL && free_map_allocate(1, &inode_sector) &&
                   inode_create(inode_sector, initial_size, false) &&
                   dir_add(dir, relative_name, inode_sector));
@@ -114,7 +119,7 @@ bool filesys_create(const char* name, off_t initial_size) {
    or if an internal memory allocation fails. */
 struct file* filesys_open(const char* name) {
   char relative_name[NAME_MAX + 1];
-  struct dir* dir = parse_dir(name, relative_name);
+  struct dir* dir = parse_dir(name, relative_name, true);
   struct inode* inode = NULL;
 
   if (dir != NULL)
@@ -127,13 +132,28 @@ struct file* filesys_open(const char* name) {
   return file_open(inode);
 }
 
+struct inode* filesys_get_inode(const char* name) {
+  char relative_name[NAME_MAX + 1];
+  struct dir* dir = parse_dir(name, relative_name, true);
+  struct inode* inode = NULL;
+
+  if (dir != NULL)
+    dir_lookup(dir, relative_name, &inode);
+
+  if (dir_get_inode(dir) != dir_get_inode(get_cwd())) {
+    // Don't want to close the process' CWD
+    dir_close(dir);
+  }
+  return inode;
+}
+
 /* Deletes the file named NAME.
    Returns true if successful, false on failure.
    Fails if no file named NAME exists,
    or if an internal memory allocation fails. */
 bool filesys_remove(const char* name) {
   char relative_name[NAME_MAX + 1];
-  struct dir* dir = parse_dir(name, relative_name);
+  struct dir* dir = parse_dir(name, relative_name, true);
   bool success = dir != NULL && dir_remove(dir, relative_name);
 
   if (dir_get_inode(dir) != dir_get_inode(get_cwd())) {
