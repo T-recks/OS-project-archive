@@ -253,7 +253,7 @@ struct dir* dir_init(struct dir* dir) {
 }
 
 struct dir* traverse(struct inode* inode, const char* path, struct dir* parent,
-                     char name[NAME_MAX + 1]) {
+                     char name[NAME_MAX + 1], bool get_s2l) {
   struct dir* d = malloc(sizeof(struct dir));
   struct inode* next_inode;
   char next_part[NAME_MAX + 1];
@@ -272,7 +272,11 @@ struct dir* traverse(struct inode* inode, const char* path, struct dir* parent,
       strlcpy(name, next_part, strlen(next_part) + 1);
     }
     if (inode_is_dir(next_inode)) {
-      parent->inode = d->inode;
+      if (get_s2l && strlen(path) == 0) {
+        return d;
+      }
+      if (!get_s2l)
+        parent->inode = d->inode;
       d->inode = next_inode;
       d->pos = 0;
     } else {

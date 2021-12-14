@@ -299,10 +299,10 @@ static bool handle_chdir(const char* path) {
 
   // traverse to find directory specified by path
   if (is_absolute(path)) {
-    new_cwd = traverse(inode_open(ROOT_DIR_SECTOR), path, parent, NULL);
+    new_cwd = traverse(inode_open(ROOT_DIR_SECTOR), path, parent, NULL, false);
   } else {
     // TODO: handle "../" relative paths
-    new_cwd = traverse(dir_get_inode(parent), path, parent, NULL);
+    new_cwd = traverse(dir_get_inode(parent), path, parent, NULL, false);
   }
 
   if (dir_get_inode(new_cwd) != dir_get_inode(parent)) { // found target directory
@@ -323,10 +323,10 @@ static bool handle_mkdir(const char* dir) {
   //  strlcpy(name, dir, strlen(dir) + 1);
   if (is_absolute(dir)) {
     // Traverse the directory tree from the root
-    traverse(inode_open(ROOT_DIR_SECTOR), dir, parent, name);
+    parent = traverse(inode_open(ROOT_DIR_SECTOR), dir, NULL, name, true);
   } else {
     // Traverse the directory tree from CWD
-    traverse(dir_get_inode(parent), dir, parent, name);
+    parent = traverse(dir_get_inode(parent), dir, NULL, name, true);
   }
 
   // Create the new directory in the parent directory
@@ -352,6 +352,12 @@ static bool handle_mkdir(const char* dir) {
     // TODO: might need to do some cleanup before returning
     return false;
   }
+  //  struct dir* new_dir = dir_open(new_inode);
+  //  block_sector_t dot_sector;
+  //  block_sector_t dotdot_sector;
+  //  success = (free_map_allocate(1, &dot_sector) && free_map_allocate(1, &dotdot_sector)
+  //            dir_add(dir, ".", dot_sector) && dir_add(dir, "..", dotdot_sector));
+  //  dir_close(new_dir);
 
   // Add the directory to the list of open files
   //  struct dir* new_dir = dir_open(new_inode);
