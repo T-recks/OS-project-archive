@@ -232,9 +232,15 @@ static int get_next_part(char part[NAME_MAX + 1], const char** srcp) {
   return 1;
 }
 
-/* TODO: further document this function.
- * if stop_early==true, traverse only as far as the second to last part of path,
- * otherwise follow the full path
+/**
+ * @brief Traverse through directory structure along path starting from inode, return the final directory
+ * 
+ * @param inode Inode starting point
+ * @param path File path
+ * @param parent Set to parent of the final directory in path
+ * @param name Set to name of file/dir in path
+ * @param stop_early Setting this to true will return one iteration before full traversal
+ * @return The final directory in path
  */
 struct dir* traverse(struct inode* inode, const char* path, struct dir** parent,
                      char name[NAME_MAX + 1], bool stop_early) {
@@ -244,13 +250,12 @@ struct dir* traverse(struct inode* inode, const char* path, struct dir** parent,
   if (name != NULL) {
     strlcpy(name, path, strlen(path) + 1);
   }
-  bool success;
 
   d->inode = inode;
   d->pos = 0;
 
   get_next_part(next_part, &path);
-  while ((success = dir_lookup(d, next_part, &next_inode))) {
+  while (dir_lookup(d, next_part, &next_inode)) {
     get_next_part(next_part, &path);
     if (name != NULL) {
       strlcpy(name, next_part, strlen(next_part) + 1);
