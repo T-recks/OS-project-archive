@@ -294,7 +294,7 @@ static bool handle_remove(char* file) {
     dir_lookup(location, name, &inode);
 
     struct inode* cwd_inode = dir_get_inode(thread_current()->pcb->cwd);
-    if (inode == NULL || inode->sector == cwd_inode->sector) {
+    if (inode == NULL) {
       success = false;
 
     } else if (dir_is_empty(dir_open(inode))) {
