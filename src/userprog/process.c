@@ -649,7 +649,18 @@ struct file_data* find_file(int fd, struct list* fd_table) {
   struct file_data* f;
   for (struct list_elem* e = list_begin(fd_table); e != list_end(fd_table); e = list_next(e)) {
     f = list_entry(e, struct file_data, elem);
-    if (f->fd == fd) {
+    if (f->fd == fd && f->file != NULL) {
+      return f;
+    }
+  }
+  return NULL;
+}
+
+struct file_data* find_dir(int fd, struct list* fd_table) {
+  struct file_data* f;
+  for (struct list_elem* e = list_begin(fd_table); e != list_end(fd_table); e = list_next(e)) {
+    f = list_entry(e, struct file_data, elem);
+    if (f->fd == fd && f->dir != NULL) {
       return f;
     }
   }
