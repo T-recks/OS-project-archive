@@ -69,8 +69,7 @@ static block_sector_t byte_to_sector(const struct inode* inode, off_t pos) {
 
   pos -= BLOCK_SECTOR_SIZE;
   // Look through indirect pointers
-  pos -= BLOCK_SECTOR_SIZE;
-  if (pos <= 128 * BLOCK_SECTOR_SIZE) {
+  if (pos < 128 * BLOCK_SECTOR_SIZE) {
     block_sector_t buffer[128];
     memset(buffer, 0, 512);
     block_read(fs_device, data.ind_ptr, buffer);
@@ -90,7 +89,7 @@ static block_sector_t byte_to_sector(const struct inode* inode, off_t pos) {
 
   // TODO: has not been tested
   // Look through doubly direct pointers
-  pos -= 512;
+  pos -= 128 * BLOCK_SECTOR_SIZE;
   block_sector_t ind_buffer[128];
   memset(ind_buffer, 0, 512);
   block_read(fs_device, data.dbl_ind_ptr, ind_buffer);
@@ -266,7 +265,7 @@ bool inode_create(block_sector_t sector, off_t length, bool isdir) {
 
   disk_inode = calloc(1, sizeof *disk_inode);
   if (disk_inode != NULL) {
-    size_t sectors = bytes_to_sectors(length);
+    // size_t sectors = bytes_to_sectors(length);
     disk_inode->length = length;
     disk_inode->magic = INODE_MAGIC;
 
@@ -275,13 +274,13 @@ bool inode_create(block_sector_t sector, off_t length, bool isdir) {
       //    if (free_map_allocate(sectors, &disk_inode->start)) {
       // cache_write(sector, disk_inode);
       block_write(fs_device, sector, disk_inode);
-      if (sectors > 0) {
-        static char zeros[BLOCK_SECTOR_SIZE];
-        size_t i;
+      // if (sectors > 0) {
+      //   static char zeros[BLOCK_SECTOR_SIZE];
+      //   size_t i;
 
-        //        for (i = 0; i < sectors; i++)
-        //          block_write(fs_device, disk_inode->start + i, zeros);
-      }
+      //   //        for (i = 0; i < sectors; i++)
+      //   //          block_write(fs_device, disk_inode->start + i, zeros);
+      // }
       success = true;
     }
     free(disk_inode);
