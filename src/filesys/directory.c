@@ -180,12 +180,6 @@ done:
 
 void dir_init(struct dir* parent, struct dir* dir) {
   bool success;
-  //  block_sector_t dot_sector;
-  //  block_sector_t dotdot_sector;
-  //  success = free_map_allocate(1, &dot_sector);
-  //  success = free_map_allocate(1, &dotdot_sector);
-  //  success = inode_create(inode_get_inumber(dir->inode), sizeof(struct dir_entry), true);
-  //  success = inode_create(inode_get_inumber(parent->inode), sizeof(struct dir_entry), true);
   success = dir_add(dir, ".", inode_get_inumber(dir->inode));
   success = dir_add(dir, "..", inode_get_inumber(parent->inode));
   struct dir* d = malloc(sizeof(struct dir));

@@ -239,9 +239,6 @@ static bool handle_create(char* file, unsigned size) {
 }
 
 static bool handle_remove(char* file) {
-  if (strcmp(file, "dir467") == 0) {
-    msg("removing 467");
-  }
   lock_acquire(&filesys_lock);
   bool success = filesys_remove(file);
   lock_release(&filesys_lock);
@@ -305,10 +302,6 @@ static bool handle_chdir(const char* path) {
     new_cwd = traverse(inode_open(ROOT_DIR_SECTOR), path, parent, NULL, false);
   } else {
     // TODO: handle "../" relative paths
-    if (strcmp(path, "..") == 0) {
-      // 25 times
-      msg("gere");
-    }
     new_cwd = traverse(dir_get_inode(parent), path, parent, NULL, false);
   }
 
