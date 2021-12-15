@@ -239,6 +239,9 @@ static bool handle_create(char* file, unsigned size) {
 }
 
 static bool handle_remove(char* file) {
+  if (strcmp(file, "dir467") == 0) {
+    msg("removing 467");
+  }
   lock_acquire(&filesys_lock);
   bool success = filesys_remove(file);
   lock_release(&filesys_lock);
@@ -302,6 +305,10 @@ static bool handle_chdir(const char* path) {
     new_cwd = traverse(inode_open(ROOT_DIR_SECTOR), path, parent, NULL, false);
   } else {
     // TODO: handle "../" relative paths
+    if (strcmp(path, "..") == 0) {
+      // 25 times
+      msg("gere");
+    }
     new_cwd = traverse(dir_get_inode(parent), path, parent, NULL, false);
   }
 
@@ -350,31 +357,12 @@ static bool handle_mkdir(const char* dir) {
   success = dir_lookup(parent, name, &new_inode); // Get the new inode
   if (!success) {
     // TODO: might need to do some cleanup before returning
+    success = dir_remove(parent, name);
     return false;
   }
-  //  struct dir* new_dir = dir_open(new_inode);
-  //  block_sector_t dot_sector;
-  //  block_sector_t dotdot_sector;
-  //  success = (free_map_allocate(1, &dot_sector) && free_map_allocate(1, &dotdot_sector)
-  //            dir_add(dir, ".", dot_sector) && dir_add(dir, "..", dotdot_sector));
-  //  dir_close(new_dir);
-
-  // Add the directory to the list of open files
-  //  struct dir* new_dir = dir_open(new_inode);
-  //  struct list* fd_table = thread_current()->pcb->open_files;
-  //  struct file_data* fd_entry = (struct file_data*)malloc(sizeof(struct file_data));
-  //  fd_entry->dir = new_dir;
-  //  fd_entry->file = NULL;
-  //  fd_entry->filename = (char*)name;
-  //  fd_entry->ref_cnt = 1;
-  //  if (!list_empty(fd_table)) {
-  //    struct list_elem* e = list_back(fd_table);
-  //    struct file_data* f = list_entry(e, struct file_data, elem);
-  //    fd_entry->fd = f->fd + 1;
-  //  } else {
-  //    fd_entry->fd = 3;
-  //  }
-  //  list_push_back(fd_table, &fd_entry->elem);
+  struct dir* new_dir = dir_open(new_inode);
+  dir_init(parent, new_dir);
+  dir_close(new_dir);
   return true;
 }
 

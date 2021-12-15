@@ -7,6 +7,7 @@
 #include "filesys/inode.h"
 #include "filesys/directory.h"
 #include "threads/thread.h"
+#include "threads/malloc.h"
 #include "userprog/process.h"
 
 /* Partition that contains the file system. */
@@ -61,6 +62,15 @@ static struct dir* parse_dir(const char* path, char name[NAME_MAX + 1]) {
   return dir;
 }
 
+static void cleanup_dir(struct dir* dir) {
+  if (dir_get_inode(dir) != dir_get_inode(get_cwd())) {
+    // Don't want to close the process' CWD
+    dir_close(dir);
+  } else {
+    free(dir);
+  }
+}
+
 /* Initializes the file system module.
    If FORMAT is true, reformats the file system. */
 void filesys_init(bool format) {
@@ -99,10 +109,7 @@ bool filesys_create(const char* name, off_t initial_size) {
   if (!success && inode_sector != 0)
     free_map_release(inode_sector, 1);
 
-  if (dir_get_inode(dir) != dir_get_inode(get_cwd())) {
-    // Don't want to close the process' CWD
-    dir_close(dir);
-  }
+  cleanup_dir(dir);
 
   return success;
 }
@@ -120,10 +127,8 @@ struct file* filesys_open(const char* name) {
   if (dir != NULL)
     dir_lookup(dir, relative_name, &inode);
 
-  if (dir_get_inode(dir) != dir_get_inode(get_cwd())) {
-    // Don't want to close the process' CWD
-    dir_close(dir);
-  }
+  cleanup_dir(dir);
+
   return file_open(inode);
 }
 
@@ -141,10 +146,8 @@ struct inode* filesys_get_inode(const char* name) {
   if (dir != NULL)
     dir_lookup(dir, relative_name, &inode);
 
-  if (dir_get_inode(dir) != dir_get_inode(get_cwd())) {
-    // Don't want to close the process' CWD
-    dir_close(dir);
-  }
+  cleanup_dir(dir);
+
   return inode;
 }
 
@@ -158,10 +161,7 @@ bool filesys_remove(const char* name) {
 
   bool success = dir != NULL && dir_remove(dir, relative_name);
 
-  if (dir_get_inode(dir) != dir_get_inode(get_cwd())) {
-    // Don't want to close the process' CWD
-    dir_close(dir);
-  }
+  cleanup_dir(dir);
 
   return success;
 }
@@ -172,6 +172,8 @@ static void do_format(void) {
   free_map_create();
   if (!dir_create(ROOT_DIR_SECTOR, 16))
     PANIC("root directory creation failed");
+  struct dir* root = dir_open_root();
+  dir_init(root, root);
   free_map_close();
   printf("done.\n");
 }

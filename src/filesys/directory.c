@@ -111,13 +111,19 @@ static bool lookup(const struct dir* dir, const char* name, struct dir_entry* ep
    a null pointer.  The caller must close *INODE. */
 bool dir_lookup(const struct dir* dir, const char* name, struct inode** inode) {
   struct dir_entry e;
+  off_t ofs = 0;
+  bool success = false;
 
   ASSERT(dir != NULL);
   ASSERT(name != NULL);
 
-  if (lookup(dir, name, &e, NULL))
+  if (lookup(dir, name, &e, &ofs)) {
     *inode = inode_open(e.inode_sector);
-  else
+    if (*inode == NULL) {
+      e.in_use = false;
+      success = inode_write_at(dir->inode, &e, sizeof e, ofs) == sizeof e;
+    }
+  } else
     *inode = NULL;
 
   return *inode != NULL;
@@ -156,20 +162,35 @@ bool dir_add(struct dir* dir, const char* name, block_sector_t inode_sector) {
     if (!e.in_use)
       break;
 
+  // Initialize "." and ".." pointers
+  //  struct dir_entry parent;
+  //  lookup(dir, ".", parent, NULL);
+  //  e.loc = &e;
+  //  e.parent = &parent;
+
   /* Write slot. */
   e.in_use = true;
   strlcpy(e.name, name, sizeof e.name);
   e.inode_sector = inode_sector;
   success = inode_write_at(dir->inode, &e, sizeof e, ofs) == sizeof e;
 
-  // Initialize "." and ".." pointers
-  struct dir_entry parent;
-  inode_read_at(dir->inode, &parent, sizeof e, 0);
-  e.loc = &e;
-  e.parent = &parent;
-
 done:
   return success;
+}
+
+void dir_init(struct dir* parent, struct dir* dir) {
+  bool success;
+  //  block_sector_t dot_sector;
+  //  block_sector_t dotdot_sector;
+  //  success = free_map_allocate(1, &dot_sector);
+  //  success = free_map_allocate(1, &dotdot_sector);
+  //  success = inode_create(inode_get_inumber(dir->inode), sizeof(struct dir_entry), true);
+  //  success = inode_create(inode_get_inumber(parent->inode), sizeof(struct dir_entry), true);
+  success = dir_add(dir, ".", inode_get_inumber(dir->inode));
+  success = dir_add(dir, "..", inode_get_inumber(parent->inode));
+  struct dir* d = malloc(sizeof(struct dir));
+  d->inode = dir->inode;
+  d->pos = 0;
 }
 
 /* Removes any entry for NAME in DIR.
@@ -217,7 +238,7 @@ bool dir_readdir(struct dir* dir, char name[NAME_MAX + 1]) {
 
   while (inode_read_at(dir->inode, &e, sizeof e, dir->pos) == sizeof e) {
     dir->pos += sizeof e;
-    if (e.in_use) {
+    if (e.in_use && strcmp(e.name, ".") != 0 && strcmp(e.name, "..") != 0) {
       strlcpy(name, e.name, NAME_MAX + 1);
       return true;
     }
@@ -248,12 +269,6 @@ static int get_next_part(char part[NAME_MAX + 1], const char** srcp) {
   /* Advance source pointer. */
   *srcp = src;
   return 1;
-}
-
-struct dir* dir_init(struct dir* dir) {
-  struct dir* d = malloc(sizeof(struct dir));
-  d->inode = dir->inode;
-  d->pos = 0;
 }
 
 struct dir* traverse(struct inode* inode, const char* path, struct dir* parent,
@@ -290,6 +305,8 @@ struct dir* traverse(struct inode* inode, const char* path, struct dir* parent,
     if (get_s2l && strlen(path) == 0) {
       return d;
     }
+    if (strcmp(next_part, "..") == 0 && strlen(path) == 0)
+      return d;
   }
 
   return d;
@@ -303,7 +320,7 @@ bool dir_is_empty(const struct inode* inode) {
 
   // Search dir for an active entry and return false only if we find one
   for (ofs = 0; inode_read_at(inode, &e, sizeof e, ofs) == sizeof e; ofs += sizeof e) {
-    if (e.in_use && strcmp(e.name, ".") && strcmp(e.name, "..")) {
+    if (e.in_use && strcmp(e.name, ".") != 0 && strcmp(e.name, "..") != 0) {
       return false;
     }
   }
