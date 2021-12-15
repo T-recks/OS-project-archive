@@ -375,16 +375,11 @@ static bool handle_readdir(int fd, char* name) {
 }
 
 static bool handle_isdir(int fd) {
-  struct list* dirs = &(thread_current()->pcb->active_dirs);
+  struct list* open_files = thread_current()->pcb->open_files;
 
-  for (struct list_elem* e = list_begin(dirs); e != list_end(dirs); e = list_next(e)) {
-    struct dir_data* d = list_entry(e, struct dir_data, elem);
-    if (fd == d->fd) {
-      return true;
-    }
-  }
+  struct file_data* fd_entry = find_file(fd, open_files);
 
-  return false;
+  return (fd_entry->dir != NULL);
 }
 
 static int handle_inumber(int fd) {
