@@ -2,37 +2,12 @@
 #define FILESYS_INODE_H
 
 #include <stdbool.h>
-#include <list.h>
 #include "filesys/off_t.h"
 #include "devices/block.h"
 
 #define BUFFER_LEN 64
-/* Identifies an inode. */
-#define INODE_MAGIC 0x494e4f44
-#define NUM_DIR_PTR 123
 
 struct bitmap;
-
-/* On-disk inode.
-   Must be exactly BLOCK_SECTOR_SIZE bytes long. */
-struct inode_disk {
-  off_t length;   /* File size in bytes. */
-  unsigned magic; /* Magic number. */
-  bool isdir;     /* True if a directory, otherwise it's a file */
-  block_sector_t direct_ptr[NUM_DIR_PTR];
-  block_sector_t ind_ptr;     /* points to 128 data blocks */
-  block_sector_t dbl_ind_ptr; /* points to 16384 data blocks */
-};
-
-/* In-memory inode. */
-struct inode {
-  struct list_elem elem;  /* Element in inode list. */
-  block_sector_t sector;  /* Sector number of disk location. */
-  int open_cnt;           /* Number of openers. */
-  bool removed;           /* True if deleted, false otherwise. */
-  int deny_write_cnt;     /* 0: writes ok, >0: deny writes. */
-  struct inode_disk data; /* Inode content. */
-};
 
 typedef struct file_cache_block {
   block_sector_t sector;      // disk sector address cached by this block, 512B
@@ -57,8 +32,6 @@ struct inode* inode_reopen(struct inode*);
 block_sector_t inode_get_inumber(const struct inode*);
 block_sector_t inode_open_cnt(const struct inode*);
 bool inode_is_dir(struct inode*);
-bool inode_is_empty(struct inode*);
-void inode_set_removed(struct inode*);
 void inode_close(struct inode*);
 void inode_remove(struct inode*);
 off_t inode_read_at(struct inode*, void*, off_t size, off_t offset);
