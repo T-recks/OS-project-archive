@@ -73,6 +73,7 @@ static block_sector_t byte_to_sector(const struct inode* inode, off_t pos) {
     block_sector_t buffer[128];
     memset(buffer, 0, 512);
     block_read(fs_device, data.ind_ptr, buffer);
+    // cache_read(data.ind_ptr, buffer);
     index = 0;
     while (pos >= BLOCK_SECTOR_SIZE && index < 127) {
       pos -= BLOCK_SECTOR_SIZE;
@@ -93,11 +94,13 @@ static block_sector_t byte_to_sector(const struct inode* inode, off_t pos) {
   block_sector_t ind_buffer[128];
   memset(ind_buffer, 0, 512);
   block_read(fs_device, data.dbl_ind_ptr, ind_buffer);
+  // cache_read(data.dbl_ind_ptr, ind_buffer);
   for (int i = 0; i < 128; i++) {
     block_sector_t buffer[128];
     memset(buffer, 0, 512);
     block_sector_t ind_block = ind_buffer[i];
     block_read(fs_device, ind_block, buffer);
+    // cache_read(ind_block, buffer);
     block_sector_t block = ind_block;
     index = 0;
     while (pos >= BLOCK_SECTOR_SIZE && index < 127) {
@@ -113,11 +116,7 @@ static block_sector_t byte_to_sector(const struct inode* inode, off_t pos) {
     }
   }
 
-  //  if (pos < inode->data.length)
-  ////    return inode->data.start + pos / BLOCK_SECTOR_SIZE;
-  //    return inode->data.direct_ptr[0] + pos / BLOCK_SECTOR_SIZE;
-  //  else
-  //    return -1;
+  return -1;
 }
 
 static bool inode_resize(struct inode_disk* id, off_t size) {
@@ -125,11 +124,11 @@ static bool inode_resize(struct inode_disk* id, off_t size) {
 
   // Try direct pointers
   for (int i = 0; i < NUM_DIR_PTR; i++) {
-    //    if (size <= 512 * i && id->direct_ptr[i] != 0) {
-    //      // Shrink inode
-    //      free_map_release(id->direct_ptr[i], 1);
-    //      id->direct_ptr[i] = 0;
-    //    }
+    if (size <= 512 * i && id->direct_ptr[i] != 0) {
+      // Shrink inode
+      free_map_release(id->direct_ptr[i], 1);
+      id->direct_ptr[i] = 0;
+    }
     if (size > 512 * i && id->direct_ptr[i] == 0) {
       if (!free_map_allocate(1, &id->direct_ptr[i])) {
         // Allocation failed; rollback
@@ -159,10 +158,10 @@ static bool inode_resize(struct inode_disk* id, off_t size) {
     block_read(fs_device, id->ind_ptr, buffer);
   }
   for (int i = 0; i < 128; i++) {
-    //    if (size <= (NUM_DIR_PTR + i) * 512 && buffer[i] != 0) {
-    //      free_map_release(buffer[i], 1);
-    //      buffer[i] = 0;
-    //    }
+    if (size <= (NUM_DIR_PTR + i) * 512 && buffer[i] != 0) {
+      free_map_release(buffer[i], 1);
+      buffer[i] = 0;
+    }
     if (size > (NUM_DIR_PTR + i) * 512 && buffer[i] == 0) {
       if (!free_map_allocate(1, &buffer[i])) {
         inode_resize(id, id->length);
@@ -173,8 +172,8 @@ static bool inode_resize(struct inode_disk* id, off_t size) {
   }
   if (id->ind_ptr != 0 && size <= 512 * NUM_DIR_PTR) {
     // Needed to shrink the inode, and deleted all the indirect blocks; now delete the idp
-    //    free_map_release(id->ind_ptr, 1);
-    //    id->ind_ptr = 0;
+    free_map_release(id->ind_ptr, 1);
+    id->ind_ptr = 0;
   } else {
     block_write(fs_device, id->ind_ptr, buffer);
   }
@@ -213,8 +212,8 @@ static bool inode_resize(struct inode_disk* id, off_t size) {
     }
     for (int k = 0; k < 128; k++) {
       if (size <= (NUM_DIR_PTR + k) * 512 + 128 * 512 && ind_buffer[k] != 0) {
-        //        free_map_release(ind_buffer[i], 1);
-        //        ind_buffer[i] = 0;
+        free_map_release(ind_buffer[i], 1);
+        ind_buffer[i] = 0;
       }
       if (size > (NUM_DIR_PTR + k) * 512 + 128 * 512 && ind_buffer[k] == 0) {
         if (!free_map_allocate(1, &ind_buffer[k])) {
@@ -227,8 +226,8 @@ static bool inode_resize(struct inode_disk* id, off_t size) {
     block_write(fs_device, buffer[i], ind_buffer);
   }
   if (id->ind_ptr != 0 && size <= 512 * NUM_DIR_PTR + 128 * 512) {
-    //    free_map_release(id->dbl_ind_ptr, 1);
-    //    id->dbl_ind_ptr = 0;
+    free_map_release(id->dbl_ind_ptr, 1);
+    id->dbl_ind_ptr = 0;
   } else {
     block_write(fs_device, id->dbl_ind_ptr, buffer);
   }
