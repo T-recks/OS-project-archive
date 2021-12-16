@@ -66,7 +66,9 @@ static block_sector_t byte_to_sector(const struct inode* inode, off_t pos) {
   }
 
   if (pos < BLOCK_SECTOR_SIZE) {
-    return data->direct_ptr[index];
+    block_sector_t ret = data->direct_ptr[index];
+    free(data);
+    return ret;
   } else if (data->ind_ptr == 0) {
     // Offset is past end of file
     free(data);
