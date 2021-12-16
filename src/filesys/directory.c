@@ -297,6 +297,7 @@ struct dir* traverse(struct inode* inode, const char* path, struct dir* parent,
     }
     if (strcmp(next_part, "..") == 0 && strlen(path) == 0)
       return d;
+    inode_close(next_inode);
   }
 
   if (get_s2l && strlen(path) == 0) {

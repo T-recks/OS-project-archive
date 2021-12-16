@@ -317,6 +317,9 @@ static bool handle_chdir(const char* path) {
 }
 
 static bool handle_mkdir(const char* dir) {
+  if (strlen(dir) == 0) {
+    return false;
+  }
   struct dir* parent = thread_current()->pcb->cwd;
   bool success;
   char name[NAME_MAX + 1];
@@ -355,7 +358,14 @@ static bool handle_mkdir(const char* dir) {
   }
   struct dir* new_dir = dir_open(new_inode);
   success = success && dir_init(parent, new_dir);
+  //  if (dir_get_inode(parent) != dir_get_inode(thread_current()->pcb->cwd)) {
+  //    // Don't want to close the process' CWD
+  //    dir_close(parent);
+  //  } else {
+  //    free(parent);
+  //  }
   dir_close(new_dir);
+  inode_close(new_inode);
   return success;
 }
 
