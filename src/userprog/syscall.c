@@ -317,6 +317,11 @@ static bool handle_chdir(const char* path) {
 }
 
 static bool handle_mkdir(const char* dir) {
+
+  if (strlen(dir) == 0) {
+    return false;
+  }
+
   struct dir* parent = thread_current()->pcb->cwd;
   bool success;
   char name[NAME_MAX + 1];
