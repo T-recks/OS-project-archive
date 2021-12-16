@@ -354,9 +354,9 @@ static bool handle_mkdir(const char* dir) {
     return false;
   }
   struct dir* new_dir = dir_open(new_inode);
-  dir_init(parent, new_dir);
+  success = success && dir_init(parent, new_dir);
   dir_close(new_dir);
-  return true;
+  return success;
 }
 
 static bool handle_readdir(int fd, char* name) {

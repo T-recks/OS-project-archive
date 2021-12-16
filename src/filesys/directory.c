@@ -178,13 +178,9 @@ done:
   return success;
 }
 
-void dir_init(struct dir* parent, struct dir* dir) {
-  bool success;
-  success = dir_add(dir, ".", inode_get_inumber(dir->inode));
-  success = dir_add(dir, "..", inode_get_inumber(parent->inode));
-  struct dir* d = malloc(sizeof(struct dir));
-  d->inode = dir->inode;
-  d->pos = 0;
+bool dir_init(struct dir* parent, struct dir* dir) {
+  return dir_add(dir, ".", inode_get_inumber(dir->inode)) &&
+         dir_add(dir, "..", inode_get_inumber(parent->inode));
 }
 
 /* Removes any entry for NAME in DIR.
@@ -301,6 +297,10 @@ struct dir* traverse(struct inode* inode, const char* path, struct dir* parent,
     }
     if (strcmp(next_part, "..") == 0 && strlen(path) == 0)
       return d;
+  }
+
+  if (get_s2l && strlen(path) == 0) {
+    strlcpy(name, next_part, strlen(next_part) + 1);
   }
 
   return d;
