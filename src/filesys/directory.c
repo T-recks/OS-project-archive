@@ -201,7 +201,7 @@ bool dir_remove(struct dir* dir, const char* name) {
 
   /* Open inode. */
   inode = inode_open(e.inode_sector);
-  if (inode == NULL || inode == thread_current()->pcb->cwd->inode || inode_open_cnt(inode) > 4)
+  if (inode == NULL || inode == thread_current()->pcb->cwd->inode || inode_open_cnt(inode) > 5)
     goto done;
 
   if (inode_is_dir(inode) && !dir_is_empty(inode))
