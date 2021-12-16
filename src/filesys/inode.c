@@ -36,12 +36,11 @@ static inline size_t bytes_to_sectors(off_t size) { return DIV_ROUND_UP(size, BL
 
 /* In-memory inode. */
 struct inode {
-  struct list_elem elem;  /* Element in inode list. */
-  block_sector_t sector;  /* Sector number of disk location. */
-  int open_cnt;           /* Number of openers. */
-  bool removed;           /* True if deleted, false otherwise. */
-  int deny_write_cnt;     /* 0: writes ok, >0: deny writes. */
-  struct inode_disk data; /* Inode content. */
+  struct list_elem elem; /* Element in inode list. */
+  block_sector_t sector; /* Sector number of disk location. */
+  int open_cnt;          /* Number of openers. */
+  bool removed;          /* True if deleted, false otherwise. */
+  int deny_write_cnt;    /* 0: writes ok, >0: deny writes. */
 };
 
 /* Returns the block device sector that contains byte offset POS
@@ -51,8 +50,14 @@ struct inode {
 static block_sector_t byte_to_sector(const struct inode* inode, off_t pos) {
   ASSERT(inode != NULL);
   off_t index = 0;
-  // TODO: Get the inode_disk from the cache
-  struct inode_disk data = inode->data;
+
+  // Get the inode_disk from the cache
+  struct inode_disk* data;
+  data = malloc(BLOCK_SECTOR_SIZE);
+  if (data == NULL)
+    return -1;
+
+  cache_read(inode->sector, data);
 
   while (pos >= BLOCK_SECTOR_SIZE && index < NUM_DIR_PTR - 1) {
     // Start counting how many blocks above the first block the offset it
@@ -61,9 +66,10 @@ static block_sector_t byte_to_sector(const struct inode* inode, off_t pos) {
   }
 
   if (pos < BLOCK_SECTOR_SIZE) {
-    return data.direct_ptr[index];
-  } else if (data.ind_ptr == 0) {
+    return data->direct_ptr[index];
+  } else if (data->ind_ptr == 0) {
     // Offset is past end of file
+    free(data);
     return -1;
   }
 
@@ -73,7 +79,7 @@ static block_sector_t byte_to_sector(const struct inode* inode, off_t pos) {
     block_sector_t buffer[128];
     memset(buffer, 0, 512);
     // block_read(fs_device, data.ind_ptr, buffer);
-    cache_read(data.ind_ptr, buffer);
+    cache_read(data->ind_ptr, buffer);
     index = 0;
     while (pos >= BLOCK_SECTOR_SIZE && index < 127) {
       pos -= BLOCK_SECTOR_SIZE;
@@ -81,9 +87,11 @@ static block_sector_t byte_to_sector(const struct inode* inode, off_t pos) {
     }
 
     if (pos < BLOCK_SECTOR_SIZE) {
+      free(data);
       return buffer[index];
-    } else if (data.dbl_ind_ptr == 0) {
+    } else if (data->dbl_ind_ptr == 0) {
       // Offset is past end of file
+      free(data);
       return -1;
     }
   }
@@ -94,7 +102,7 @@ static block_sector_t byte_to_sector(const struct inode* inode, off_t pos) {
   block_sector_t ind_buffer[128];
   memset(ind_buffer, 0, 512);
   // block_read(fs_device, data.dbl_ind_ptr, ind_buffer);
-  cache_read(data.dbl_ind_ptr, ind_buffer);
+  cache_read(data->dbl_ind_ptr, ind_buffer);
   for (int i = 0; i < 128; i++) {
     block_sector_t buffer[128];
     memset(buffer, 0, 512);
@@ -109,13 +117,15 @@ static block_sector_t byte_to_sector(const struct inode* inode, off_t pos) {
     }
 
     if (pos < BLOCK_SECTOR_SIZE) {
+      free(data);
       return buffer[index];
-    } else if (data.dbl_ind_ptr == 0) {
+    } else if (data->dbl_ind_ptr == 0) {
       // Offset is past end of file
+      free(data);
       return -1;
     }
   }
-
+  free(data);
   return -1;
 }
 
@@ -316,7 +326,10 @@ struct inode* inode_open(block_sector_t sector) {
   inode->open_cnt = 1;
   inode->deny_write_cnt = 0;
   inode->removed = false;
-  cache_read(inode->sector, &inode->data);
+
+  //  do we need this data field?
+  // cache_read(inode->sector, &inode->data);
+
   // block_read(fs_device, inode->sector, &inode->data);
   return inode;
 }
@@ -334,8 +347,17 @@ block_sector_t inode_get_inumber(const struct inode* inode) { return inode->sect
 block_sector_t inode_open_cnt(const struct inode* inode) { return inode->open_cnt; }
 
 bool inode_is_dir(struct inode* inode) {
-  // TODO: get this from cache
-  return inode->data.isdir;
+  // Get the inode_disk from the cache
+  // Get the inode_disk from the cache
+  struct inode_disk* data;
+  data = malloc(BLOCK_SECTOR_SIZE);
+  if (data == NULL)
+    return false;
+
+  cache_read(inode->sector, data);
+  bool ret = data->isdir;
+  free(data);
+  return ret;
 }
 
 /* Closes INODE and writes it to disk.
@@ -354,9 +376,19 @@ void inode_close(struct inode* inode) {
     /* Deallocate blocks if removed. */
     if (inode->removed) {
       free_map_release(inode->sector, 1);
-      inode_resize(&inode->data, 0);
-    }
+      // Get the inode_disk from the cache
+      // Get the inode_disk from the cache
+      struct inode_disk* data;
+      data = malloc(BLOCK_SECTOR_SIZE);
+      if (data == NULL)
+        return;
 
+      cache_read(inode->sector, data);
+      inode_resize(data, 0);
+      cache_write(inode->sector, data);
+
+      free(data);
+    }
     free(inode);
   }
 }
@@ -431,10 +463,21 @@ off_t inode_write_at(struct inode* inode, const void* buffer_, off_t size, off_t
   if (inode->deny_write_cnt)
     return 0;
 
-  // TODO: Get the data from the cache
-  if (offset + size > inode->data.length) {
-    inode_resize(&inode->data, offset + size);
+  // Get the inode_disk from the cache
+  // Get the inode_disk from the cache
+  struct inode_disk* data;
+  data = malloc(BLOCK_SECTOR_SIZE);
+  if (data == NULL)
+    return -1;
+
+  cache_read(inode->sector, data);
+
+  if (offset + size > data->length) {
+    inode_resize(data, offset + size);
+    cache_write(inode->sector, data);
   }
+
+  free(data);
 
   while (size > 0) {
     /* Sector to write, starting byte offset within sector. */
@@ -504,7 +547,21 @@ void inode_allow_write(struct inode* inode) {
 }
 
 /* Returns the length, in bytes, of INODE's data. */
-off_t inode_length(const struct inode* inode) { return inode->data.length; }
+off_t inode_length(const struct inode* inode) {
+
+  // Get the inode_disk from the cache
+  struct inode_disk* data;
+  data = malloc(BLOCK_SECTOR_SIZE);
+  if (data == NULL)
+    return -1;
+
+  cache_read(inode->sector, data);
+  off_t ret = data->length;
+
+  free(data);
+
+  return ret;
+}
 
 void cache_init() {
 
