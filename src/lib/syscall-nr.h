@@ -2,7 +2,8 @@
 #define __LIB_SYSCALL_NR_H
 
 /* System call numbers. */
-enum {
+typedef enum {
+  SYS_FIRST = 0,
   /* Projects 2 and later. */
   SYS_HALT,         /* Halt the operating system. */
   SYS_EXIT,         /* Terminate this process. */
@@ -39,7 +40,9 @@ enum {
   SYS_MKDIR,   /* Create a directory. */
   SYS_READDIR, /* Reads a directory entry. */
   SYS_ISDIR,   /* Tests if a fd represents a directory. */
-  SYS_INUMBER  /* Returns the inode number for a fd. */
-};
+  SYS_INUMBER, /* Returns the inode number for a fd. */
+
+  SYS_LAST
+} sys_nr_t;
 
 #endif /* lib/syscall-nr.h */

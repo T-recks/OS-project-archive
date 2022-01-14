@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <debug.h>
 #include <pthread.h>
+#include "../syscall-nr.h"
 
 /* Process identifier. */
 typedef int pid_t;
@@ -23,6 +24,10 @@ typedef int mapid_t;
 /* Typical return values from main() and arguments to exit(). */
 #define EXIT_SUCCESS 0 /* Successful execution. */
 #define EXIT_FAILURE 1 /* Unsuccessful execution. */
+
+int sys_arity(sys_nr_t);
+bool sys_is_init(sys_nr_t);
+void sys_meta_init(void);
 
 /* Projects 2 and later. */
 void halt(void) NO_RETURN;

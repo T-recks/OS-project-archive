@@ -2,6 +2,64 @@
 #include "../syscall-nr.h"
 #include <pthread.h>
 
+static int sys_arity_table[SYS_LAST - SYS_FIRST + 1];
+static bool sys_init_table[SYS_LAST - SYS_FIRST + 1];
+
+int sys_arity(sys_nr_t num) {
+    return sys_arity_table[num];
+}
+
+/* Initialize the syscall with ID, creating its metadata.
+ * Currently the only metadata that needs to be initialized is
+ * the arity of each syscall.
+ */ 
+static void init(sys_nr_t id, int arity) {
+    sys_arity_table[id] = arity;
+    sys_init_table[id] = true;
+}
+
+bool sys_is_init(sys_nr_t num) {
+    return sys_init_table[num];
+}
+
+void sys_meta_init() {
+    for (int i = 0; i < SYS_LAST; i++) {
+      sys_init_table[i] = false;
+    }
+    init(SYS_PRACTICE, 1);
+    init(SYS_HALT, 0);
+    init(SYS_EXIT, 1);
+    init(SYS_EXEC, 1);
+    init(SYS_WAIT, 1);
+    init(SYS_CREATE, 2);
+    init(SYS_REMOVE, 1);
+    init(SYS_OPEN, 1);
+    init(SYS_FILESIZE, 1);
+    init(SYS_READ, 3);
+    init(SYS_WRITE, 3);
+    init(SYS_SEEK, 2);
+    init(SYS_TELL, 1);
+    init(SYS_CLOSE, 1);
+    init(SYS_MMAP, 2);
+    init(SYS_MUNMAP, 1);
+    init(SYS_CHDIR, 1);
+    init(SYS_MKDIR, 1);
+    init(SYS_READDIR, 2);
+    init(SYS_ISDIR, 1);
+    init(SYS_INUMBER, 1);
+    init(SYS_COMPUTE_E, 1);
+    init(SYS_PT_CREATE, 3);
+    init(SYS_PT_EXIT, 0);
+    init(SYS_PT_JOIN, 1);
+    init(SYS_LOCK_INIT, 1);
+    init(SYS_LOCK_ACQUIRE, 1);
+    init(SYS_LOCK_RELEASE, 1);
+    init(SYS_SEMA_INIT, 2);
+    init(SYS_SEMA_DOWN, 1);
+    init(SYS_SEMA_UP, 1);
+    init(SYS_GET_TID, 0);
+}
+
 /* Invokes syscall NUMBER, passing no arguments, and returns the
    return value as an `int'. */
 #define syscall0(NUMBER)                                                                           \
